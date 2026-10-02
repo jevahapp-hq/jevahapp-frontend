@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { type ImageSource } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Dimensions,
   Pressable,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -16,12 +19,12 @@ import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlayba
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import { useCommentModal } from "@/app/context/CommentModalContext";
-import { useReelsStore } from "@/store/useReelsStore";
 import {
+  DarkSnapshotFill,
   FEED_VIDEO_PLAYER_HEIGHT,
   FeedVideoStill,
   FeedVideoSurface,
-  shouldHoldVideoStill,
+  posterUriFromMedia,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
 import { normalizeDurationMs } from "../../../../shared/media/normalizeDurationMs";
@@ -31,13 +34,20 @@ import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
-import { snapshotPlayerFrame } from "../../video-feed/videoFrameSnapshotCache";
 import { savePlayhead } from "../../video-feed/playheadCache";
 import {
   readPlayerCurrentTimeSec,
   runWithLivePlayer,
 } from "../../video-feed/safeVideoPlayer";
-import { FEED_VIDEO_START_POSITION_SECONDS } from "../../video-feed/feedVideoConfig";
+import { frameForFeedVideo } from "../../video-feed/frameForFeedVideo";
+import {
+  peekFeedVideoAspect,
+  useFeedVideoAspect,
+} from "../../video-feed/useFeedVideoAspect";
+import {
+  snapshotPlayerFrame,
+  useVideoFrameSnapshot,
+} from "../../video-feed/videoFrameSnapshotCache";
 import { isRetryableVideoSourceError } from "../../../../shared/utils/videoUrlManager";
 
 export interface VideoCardPlayerAreaProps {
@@ -76,7 +86,7 @@ export interface VideoCardPlayerAreaProps {
   onSurfaceReadyChange?: (ready: boolean) => void;
 }
 
-/** Same size as a live player. Prefer the paused frame over the cover art. */
+/** Parked card. Same 9:16 column as the live player, last frame if we have one. */
 function VideoPlayerSlot({
   video,
   url,
@@ -84,16 +94,55 @@ function VideoPlayerSlot({
   video?: MediaItem;
   url?: string | null;
 }) {
+  const boxW = Dimensions.get("window").width;
+  const snapshot = useVideoFrameSnapshot(url ?? null);
+  const posterUri = posterUriFromMedia(video);
+  const sideSource: ImageSource | null = snapshot
+    ? (snapshot as ImageSource)
+    : posterUri
+      ? { uri: posterUri }
+      : null;
+  const fitted = frameForFeedVideo(
+    url ? peekFeedVideoAspect(url) : null,
+    boxW
+  );
+  const nineSixteen = fitted.portrait;
+  const pictureW = nineSixteen ? fitted.width : boxW;
+  const side = nineSixteen
+    ? Math.max(0, Math.round((boxW - pictureW) / 2))
+    : 0;
   return (
     <View
       collapsable={false}
       style={{
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
-        backgroundColor: "#1A0E0A",
+        backgroundColor: "#000",
       }}
     >
-      <FeedVideoStill item={video} url={url} />
+      {nineSixteen && sideSource ? (
+        <DarkSnapshotFill source={sideSource} />
+      ) : null}
+      <View
+        style={{
+          height: FEED_VIDEO_PLAYER_HEIGHT,
+          width: "100%",
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        {side > 0 ? (
+          <View style={{ width: side, height: FEED_VIDEO_PLAYER_HEIGHT }} />
+        ) : null}
+        <View style={{ width: pictureW, height: FEED_VIDEO_PLAYER_HEIGHT }}>
+          <FeedVideoStill
+            item={video}
+            url={url}
+            height={FEED_VIDEO_PLAYER_HEIGHT}
+            contentFit="cover"
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -197,7 +246,6 @@ function VideoCardPlayerInner(
   const {
     player,
     firstFrameReady,
-    firstFramePainted,
     nativeFirstFrame,
     handleFirstFrameRender,
     invalidateNativeFirstFrame,
@@ -214,6 +262,25 @@ function VideoCardPlayerInner(
 
   videoRef.current = player;
 
+  const measuredAspect = useFeedVideoAspect(player, videoUrl);
+  const frameAspect = measuredAspect ?? peekFeedVideoAspect(videoUrl);
+  const [boxW, setBoxW] = useState(() => Dimensions.get("window").width);
+  const fitted =
+    boxW > 0 ? frameForFeedVideo(frameAspect, boxW) : null;
+  const nineSixteen = !!fitted?.portrait;
+  const videoWidth = nineSixteen && fitted ? fitted.width : boxW;
+  const sideGap =
+    nineSixteen && fitted && boxW > fitted.width
+      ? Math.max(0, Math.round((boxW - fitted.width) / 2))
+      : 0;
+  const frameSnapshot = useVideoFrameSnapshot(videoUrl);
+  const posterUri = posterUriFromMedia(video);
+  const sideSource: ImageSource | null = frameSnapshot
+    ? (frameSnapshot as ImageSource)
+    : posterUri
+      ? { uri: posterUri }
+      : null;
+
   const {
     isPlaying,
     toggle: togglePlayback,
@@ -225,16 +292,6 @@ function VideoCardPlayerInner(
     playbackReady: firstFrameReady,
   });
 
-  const wasPlayingThisVideoRef = useRef(shouldPlayThisVideo);
-  useEffect(() => {
-    if (shouldPlayThisVideo && !wasPlayingThisVideoRef.current) {
-      // Surface was covered by Reels / another route. Require a new painted
-      // frame before uncovering — a stale nativeFirstFrame is a black decoder.
-      invalidateNativeFirstFrame();
-    }
-    wasPlayingThisVideoRef.current = shouldPlayThisVideo;
-  }, [shouldPlayThisVideo, invalidateNativeFirstFrame]);
-
   useEffect(() => {
     if (!player || isFeedActive) return;
     runWithLivePlayer(player, (p) => {
@@ -245,59 +302,42 @@ function VideoCardPlayerInner(
   }, [player, isFeedActive]);
 
   useEffect(() => {
-    if (!player || !firstFrameReady) return;
+    if (!player) return;
 
     const audiblyActive = isFeedActive && shouldPlayThisVideo;
 
-    if (audiblyActive) {
-      runWithLivePlayer(player, (p) => {
-        const targetMuted = isMuted;
-        const targetVol = isMuted ? 0 : videoVolume;
-        if (p.muted !== targetMuted) p.muted = targetMuted;
-        if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
-          p.volume = targetVol;
-        }
-        // Already decoding from muted prime — calling play() again cracks Android.
-        if (!p.playing) p.play();
-      });
-      setShowOverlay(false);
-    } else {
+    if (!audiblyActive) {
       runWithLivePlayer(player, (p) => {
         if (!p.muted) p.muted = true;
         if ((Number(p.volume) || 0) !== 0) p.volume = 0;
         const t = readPlayerCurrentTimeSec(p);
         if (t > 0.15) savePlayhead(videoUrl, t);
-        // Neighbor / scrolled-away: freeze a real frame, then the still overlay
-        // covers the VideoView so scrolling up or down is never a black decoder.
-        if (p.playing) {
-          if (!firstFramePainted) return;
-          p.pause();
-        }
-        if (firstFramePainted && nativeFirstFrame) {
-          snapshotPlayerFrame(
-            videoUrl,
-            p,
-            t > 0 ? t : FEED_VIDEO_START_POSITION_SECONDS
-          );
-        }
+        snapshotPlayerFrame(videoUrl, p, t > 0.15 ? t : undefined);
+        if (p.playing) p.pause();
       });
+      return;
     }
+
+    if (!firstFrameReady) return;
+    runWithLivePlayer(player, (p) => {
+      const targetMuted = isMuted;
+      const targetVol = isMuted ? 0 : videoVolume;
+      if (p.muted !== targetMuted) p.muted = targetMuted;
+      if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
+        p.volume = targetVol;
+      }
+      if (!p.playing) p.play();
+    });
+    setShowOverlay(false);
   }, [
     shouldPlayThisVideo,
     isFeedActive,
     firstFrameReady,
-    firstFramePainted,
-    nativeFirstFrame,
     player,
     isMuted,
     videoVolume,
     videoUrl,
   ]);
-
-  useEffect(() => {
-    if (!player || !nativeFirstFrame || !videoUrl) return;
-    snapshotPlayerFrame(videoUrl, player);
-  }, [player, nativeFirstFrame, videoUrl]);
 
   const showOverlayTemporarily = useCallback(() => {
     setShowOverlay(true);
@@ -441,25 +481,18 @@ function VideoCardPlayerInner(
       hideOverlay,
     });
 
-  const paintedRef = useRef(false);
-  paintedRef.current = nativeFirstFrame;
-
   useEffect(() => {
     return () => {
       if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-      if (!paintedRef.current) return;
-      snapshotPlayerFrame(videoUrl, videoRef.current);
     };
-  }, [tapTimeoutRef, videoUrl]);
+  }, [tapTimeoutRef]);
 
   const handleToggleMuteInternal = useCallback(() => {
     onToggleMute(key);
   }, [onToggleMute, key]);
 
-  const feedResume = useReelsStore((s) => s.resumePlayback);
   const openFullscreen = useCallback(() => {
-    snapshotPlayerFrame(videoUrl, player);
     const t = readPlayerCurrentTimeSec(player);
     if (t > 0.15) savePlayhead(videoUrl, t);
     onVideoTap(key, video, index);
@@ -479,53 +512,74 @@ function VideoCardPlayerInner(
   }
 
   const showChrome = !hideChrome;
-  const pendingResumeSec =
-    feedResume?.target === "feed" &&
-    String(feedResume.contentId) === String(contentId) &&
-    feedResume.positionMs > 400
-      ? feedResume.positionMs / 1000
-      : 0;
-  const holdStill = shouldHoldVideoStill({
-    nativeFirstFrame,
-    isSurfaceActive: shouldPlayThisVideo,
-    pendingResumeSec,
-  });
 
   return (
     <View
       className="w-full relative"
       collapsable={false}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        if (next > 0) {
+          setBoxW((current) => (Math.abs(current - next) < 1 ? current : next));
+        }
+      }}
       style={{
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
-        backgroundColor: "#1A0E0A",
+        backgroundColor: "#000",
       }}
     >
+      {nineSixteen && sideSource ? (
+        <DarkSnapshotFill source={sideSource} />
+      ) : null}
       <View
         collapsable={false}
-        style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
+        pointerEvents="box-none"
+        style={{
+          width: "100%",
+          height: FEED_VIDEO_PLAYER_HEIGHT,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
       >
-          <FeedVideoSurface
-            player={player}
-            visible
-            onFirstFrameRender={handleFirstFrameRender}
-          />
-          {holdStill ? (
+          {sideGap > 0 ? (
+            <View style={{ width: sideGap, height: FEED_VIDEO_PLAYER_HEIGHT }} />
+          ) : null}
+          <View
+            collapsable={false}
+            style={{
+              width: videoWidth > 0 ? videoWidth : "100%",
+              height: FEED_VIDEO_PLAYER_HEIGHT,
+            }}
+          >
+            <FeedVideoSurface
+              player={player}
+              visible
+              inline
+              useExoShutter={false}
+              width={videoWidth > 0 ? videoWidth : undefined}
+              height={FEED_VIDEO_PLAYER_HEIGHT}
+              contentFit="cover"
+              onFirstFrameRender={handleFirstFrameRender}
+            />
+            {!nativeFirstFrame ? (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <FeedVideoStill
+                  item={video}
+                  url={videoUrl}
+                  height={FEED_VIDEO_PLAYER_HEIGHT}
+                  contentFit="cover"
+                />
+              </View>
+            ) : null}
+          </View>
+          {sideGap > 0 ? (
             <View
-              pointerEvents="none"
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 2,
-                elevation: 4,
-                backgroundColor: "#1A0E0A",
+                width: Math.max(0, boxW - videoWidth - sideGap),
+                height: FEED_VIDEO_PLAYER_HEIGHT,
               }}
-            >
-              <FeedVideoStill item={video} url={videoUrl} />
-            </View>
+            />
           ) : null}
 
           <Pressable

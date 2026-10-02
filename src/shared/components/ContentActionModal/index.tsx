@@ -1,7 +1,9 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -49,6 +51,29 @@ export default function ContentActionModal({
     backdropStyle,
   } = useSheetTransition(isVisible, onClose);
 
+  const pendingAfterClose = useRef<(() => void) | null>(null);
+  const [held, setHeld] = useState(isVisible);
+
+  const flushPending = () => {
+    const next = pendingAfterClose.current;
+    if (!next) return;
+    pendingAfterClose.current = null;
+    next();
+  };
+
+  useEffect(() => {
+    if (internalVisible) {
+      setHeld(true);
+      return;
+    }
+    if (Platform.OS === "ios") return;
+    const timer = setTimeout(() => {
+      setHeld(false);
+      flushPending();
+    }, 480);
+    return () => clearTimeout(timer);
+  }, [internalVisible]);
+
   const { isOwner: isOwnerFromHook } = useMediaOwnership({
     mediaItem: mediaItem || (uploadedBy ? { uploadedBy } : undefined),
     isModalVisible: internalVisible,
@@ -72,17 +97,11 @@ export default function ContentActionModal({
 
   /** iOS cannot present a second RN Modal while this sheet is still open. */
   const presentAfterSheetClose = (action?: () => void) => {
+    pendingAfterClose.current = action;
     requestClose();
-    setTimeout(() => {
-      try {
-        action?.();
-      } catch (error) {
-        console.error("ContentActionModal: follow-up failed", error);
-      }
-    }, 400);
   };
 
-  if (!internalVisible) return null;
+  if (!internalVisible && !held) return null;
 
   return (
     <Modal
@@ -90,6 +109,10 @@ export default function ContentActionModal({
       transparent={true}
       animationType="none"
       onRequestClose={requestClose}
+      onDismiss={() => {
+        setHeld(false);
+        flushPending();
+      }}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View

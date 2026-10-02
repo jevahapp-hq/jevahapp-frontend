@@ -5,12 +5,14 @@
  * can see it landed and delete it if they want. Everyone else sees nothing.
  *
  * Written as "not approved" rather than "equals under_review" on purpose — the
- * API also emits `pending` (undocumented in our types) and omits the field
- * entirely on some paths, and both of those must count as unapproved rather
- * than sailing through a `=== "under_review"` check.
+ * API also emits `pending`. Public catalog rows that omit the field are marked
+ * approved before this check (`markUnspecifiedCatalogApproved`). An explicit
+ * under_review / pending / rejected value still stays owner-only.
  */
 
 import { extractAuthorId } from "../author/extractAuthorId";
+import { readModerationStatus } from "./moderationStatus";
+import { isForgottenMedia, isViewersRememberedUpload } from "./ownUploads";
 
 type Uploader =
   | string
@@ -43,8 +45,9 @@ export function isRejected(item: ModeratableItem): boolean {
   return normalizeModerationStatus(item?.moderationStatus) === "rejected";
 }
 
-/** Pending / in-review / omitted-as-unapproved — banner + extra row space. */
+/** Pending / in-review — banner + extra row space. Approved rows never qualify. */
 export function isUnderReview(item: ModeratableItem): boolean {
+  if (readModerationStatus(item) === "approved") return false;
   const status = normalizeModerationStatus(item?.moderationStatus);
   return (
     status === "under_review" ||
@@ -71,6 +74,12 @@ export function canViewerDeleteMedia(
   viewerId?: string | null
 ): boolean {
   if (!item || !viewerId) return false;
+  if (
+    isViewersRememberedUpload(item as { _id?: string; id?: string }, viewerId) &&
+    !isRejected(item)
+  ) {
+    return true;
+  }
   const uploaderId = extractUploaderId(item);
   if (!uploaderId) return false;
   return uploaderId === String(viewerId);
@@ -88,23 +97,30 @@ export function isUploadedByViewer(
   item: ModeratableItem,
   viewerId?: string | null
 ): boolean {
+  if (item && isViewersRememberedUpload(item as { _id?: string; id?: string }, viewerId)) {
+    return !isRejected(item);
+  }
   if (!viewerId) return false;
   const uploaderId = extractUploaderId(item);
-  // Unknown uploader: treat as theirs. Hiding on ambiguity would erase a
-  // user's own upload, which is the worse of the two failure modes.
-  if (!uploaderId) return true;
+  if (!uploaderId) return false;
   return uploaderId === String(viewerId);
 }
 
 /**
- * The single visibility predicate. Approved content is public; anything else is
- * owner-only.
+ * Approved posts are public. A post still under review, pending, or rejected
+ * is visible only to the uploader. A missing status is a public catalog row.
  */
 export function canViewerSeeMedia(
   item: ModeratableItem,
   viewerId?: string | null
 ): boolean {
-  if (isApproved(item)) return true;
+  if (isForgottenMedia(item)) return false;
+  const status = readModerationStatus(item);
+  if (status === "under_review" || status === "pending" || status === "rejected") {
+    return isUploadedByViewer(item, viewerId);
+  }
+  if (status === "approved") return true;
+  if (!status) return true;
   return isUploadedByViewer(item, viewerId);
 }
 

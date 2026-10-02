@@ -254,19 +254,27 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       logUserDataStatus(user, "Media Upload");
 
       const userId = String(user?._id || user?.id || "").trim();
+      const realName =
+        normalizedUser.fullName && normalizedUser.fullName !== "Anonymous User"
+          ? normalizedUser.fullName
+          : "";
+      const realFirst =
+        normalizedUser.firstName !== "Anonymous" ? normalizedUser.firstName : "";
+      const realLast =
+        normalizedUser.lastName !== "User" ? normalizedUser.lastName : "";
       const completeMediaItem: MediaItem = {
         ...item,
         uploadedBy: userId
           ? {
               _id: userId,
-              firstName: normalizedUser.firstName,
-              lastName: normalizedUser.lastName,
+              firstName: realFirst || undefined,
+              lastName: realLast || undefined,
               email: normalizedUser.email,
               avatar: normalizedUser.avatar,
-              name: normalizedUser.fullName,
+              name: realName || undefined,
             }
-          : normalizedUser.fullName,
-        speaker: normalizedUser.fullName,
+          : realName,
+        speaker: realName,
         speakerAvatar:
           normalizedUser.avatar || require("../../assets/images/Avatar-1.png"),
       };
@@ -275,16 +283,14 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       get().addMedia(completeMediaItem);
     } catch (error) {
       console.error("❌ Failed to validate user data for media upload:", error);
-
-      // Fallback: add media with anonymous user data
-      const fallbackMediaItem: MediaItem = {
+      // Do not stamp "Anonymous User" onto the upload. That label was
+      // showing up in admin as if a nameless account had uploaded it.
+      get().addMedia({
         ...item,
-        uploadedBy: "Anonymous User",
-        speaker: "Anonymous User",
+        uploadedBy: "",
+        speaker: "",
         speakerAvatar: require("../../assets/images/Avatar-1.png"),
-      };
-
-      get().addMedia(fallbackMediaItem);
+      });
     }
   },
 

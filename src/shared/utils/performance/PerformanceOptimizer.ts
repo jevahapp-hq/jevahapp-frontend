@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { InteractionManager } from "react-native";
 import {
   getPlatformOptimizations,
   getResponsivePerformanceSettings,
@@ -65,7 +64,7 @@ export class PerformanceOptimizer {
         if (typeof requestAnimationFrame !== "undefined") {
           requestAnimationFrame(() => {});
         } else {
-          InteractionManager.runAfterInteractions(() => {});
+          requestIdleCallback(() => {});
         }
       }
 
@@ -142,7 +141,7 @@ export class PerformanceOptimizer {
     optimizer.pendingRequests.set(key, requestPromise);
 
     if (background) {
-      InteractionManager.runAfterInteractions(() => {});
+      requestIdleCallback(() => {});
     }
 
     return requestPromise;
@@ -189,7 +188,7 @@ export class PerformanceOptimizer {
         return;
       }
       optimizer.imageCache.add(url);
-      InteractionManager.runAfterInteractions(() => {
+      requestIdleCallback(() => {
         if (typeof Image !== "undefined") {
           const img = new Image();
           img.src = url;

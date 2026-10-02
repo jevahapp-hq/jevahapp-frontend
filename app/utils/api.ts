@@ -6,6 +6,7 @@ import {
   environmentManager,
   getApiBaseUrl,
 } from "./environmentManager";
+import { assertAccountIdentity } from "./accountIdentity";
 import TokenUtils from "./tokenUtils";
 
 export { API_BASE_URL, getApiBaseUrl };
@@ -487,14 +488,22 @@ export class APIClient {
   async register(userData: {
     email: string;
     password: string;
-    username: string;
+    firstName: string;
+    lastName: string;
+    username?: string;
     fullName?: string;
   }): Promise<{ user: any; token: string }> {
+    const identity = assertAccountIdentity(userData);
     const response = await this.request<{ user: any; token: string }>(
       "/api/auth/register",
       {
         method: "POST",
-        body: userData,
+        body: {
+          ...userData,
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          email: identity.email,
+        },
         requireAuth: false,
       }
     );

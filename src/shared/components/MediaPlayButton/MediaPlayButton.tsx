@@ -36,8 +36,7 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
 
   const config = SIZE_CONFIG[size];
 
-  // Single handler: onPress only. Do NOT use onPressIn+onPress - that fires twice per tap
-  // and causes "must click twice" bug (first fires play, second fires pause on same tap).
+  // Touch-down only. Pairing this with onPress fires twice and toggles play back off.
   const handlePress = useCallback(
     (e: any) => {
     e?.stopPropagation?.();
@@ -62,7 +61,7 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
       ]}
     >
       <Pressable
-        onPress={handlePress}
+        onPressIn={handlePress}
         disabled={disabled}
         unstable_pressDelay={0}
         android_disableSound

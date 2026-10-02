@@ -12,7 +12,7 @@ export const FIELD_HELP: Record<string, string> = {
   contentType:
     "The format of your file — Videos, GIF, Music, Books, Podcasts, or Sermons. Match the file you uploaded.",
   cover:
-    "Optional. A square image that represents your post. You can skip this — we'll generate a thumbnail if you don't add one.",
+    "Optional. Use 1:1, 9:16, or 16:9. The preview matches that shape. You can skip this — we'll generate a thumbnail if you don't add one.",
 };
 
 export function FieldLabel({

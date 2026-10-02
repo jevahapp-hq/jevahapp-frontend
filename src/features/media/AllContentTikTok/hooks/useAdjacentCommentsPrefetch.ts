@@ -3,7 +3,6 @@
  * By default waits until after interactions so scroll stays smooth.
  */
 import { useEffect, useRef } from "react";
-import { InteractionManager } from "react-native";
 import type { MediaItem } from "../../../../shared/types";
 import { prefetchComments } from "../../../../../app/hooks/comments/prefetchComments";
 
@@ -61,7 +60,7 @@ export function useAdjacentCommentsPrefetch(options: {
       return;
     }
 
-    const task = InteractionManager.runAfterInteractions(run);
-    return () => task.cancel();
+    const task = requestIdleCallback(run);
+    return () => cancelIdleCallback(task);
   }, [focusedKey, items, getContentKey, radius, idleOnly]);
 }

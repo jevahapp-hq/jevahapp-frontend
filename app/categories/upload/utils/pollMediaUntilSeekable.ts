@@ -4,6 +4,7 @@
  */
 
 import { mediaApi } from "../../../../src/core/api/MediaApi";
+import { isModerationToken } from "../../../../src/shared/media/moderationStatus";
 
 export type MediaProcessingStatus =
   | "ready"
@@ -43,8 +44,11 @@ function normalizeSnapshot(raw: Record<string, unknown>, id: string): SeekableMe
         ? Number(durationRaw)
         : undefined;
 
+  const processingSource = isModerationToken(String(raw.status || ""))
+    ? raw.processingStatus
+    : raw.processingStatus || raw.status;
   const processingStatus = String(
-    raw.processingStatus || raw.status || ""
+    processingSource || ""
   ).toLowerCase() as MediaProcessingStatus;
 
   return {

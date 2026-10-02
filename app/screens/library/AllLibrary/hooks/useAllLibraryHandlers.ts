@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, Animated, Share } from "react-native";
 import { useDeleteMedia } from "../../../../hooks/useDeleteMedia";
+import { collectMediaDeleteIds } from "../../../../utils/mediaDelete/mediaDeleteIds";
 import { useToggleLike, useToggleSave } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import allMediaAPI from "../../../../utils/allMediaAPI";
@@ -12,6 +13,7 @@ import { useDownloadHandler } from "../../../../utils/downloadUtils";
 import { deriveVideoPosterUrl } from "../utils/libraryHelpers";
 import { resolveLikeSeed } from "@/shared/hooks/useContentLikeState";
 import { resolveSaveSeed } from "@/shared/hooks/useContentSaveState";
+import { buildContentShareFromItem } from "@/shared/share/contentShare";
 
 interface UseAllLibraryHandlersProps {
   savedItems: any[];
@@ -95,12 +97,7 @@ export function useAllLibraryHandlers({
 
   const handleShare = useCallback(async (item: any) => {
     try {
-      const mediaUrl = item.mediaUrl || item.fileUrl || "";
-      await Share.share({
-        title: item.title,
-        message: `Check out this ${item.contentType}: ${item.title}\n${mediaUrl}`,
-        url: mediaUrl,
-      });
+      await Share.share(buildContentShareFromItem(item));
       setMenuOpenId(null);
     } catch {
       setMenuOpenId(null);
@@ -229,7 +226,8 @@ export function useAllLibraryHandlers({
     if (!selectedItemForDelete) return;
 
     const itemId = selectedItemForDelete._id || selectedItemForDelete.id;
-    const success = await deleteMediaItem(itemId);
+    const ids = collectMediaDeleteIds(selectedItemForDelete);
+    const success = await deleteMediaItem(ids.length ? ids : itemId);
 
     if (success) {
       removeFromSaved(itemId);

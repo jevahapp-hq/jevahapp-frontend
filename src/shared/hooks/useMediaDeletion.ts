@@ -6,7 +6,8 @@
 import { useState, useCallback } from "react";
 import { useDeleteMedia } from "../../../app/hooks/useDeleteMedia";
 import { useMediaOwnership } from "./useMediaOwnership";
-import { getMediaId, getMediaTitle } from "../utils/mediaHelpers";
+import { deleteVisibleMedia } from "../../../app/utils/mediaDelete/deleteOperations";
+import { getMediaId } from "../utils/mediaHelpers";
 
 interface UseMediaDeletionOptions {
   mediaItem: any;
@@ -39,7 +40,7 @@ export const useMediaDeletion = ({
   viewerId,
 }: UseMediaDeletionOptions): UseMediaDeletionReturn => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const { deleteMediaItem, isLoading: isDeleting } = useDeleteMedia();
+  const { isLoading: isDeleting } = useDeleteMedia();
   
   // Use ownership hook
   const { isOwner, isLoading: isCheckingOwnership, checkOwnership } = useMediaOwnership({
@@ -59,7 +60,7 @@ export const useMediaDeletion = ({
 
   const handleDeleteConfirm = useCallback(async () => {
     const mediaId = getMediaId(mediaItem);
-    if (!mediaId) {
+    if (!mediaId && !mediaItem) {
       const error = "Media ID not found";
       console.error("❌", error);
       onDeleteError?.(error);
@@ -67,20 +68,15 @@ export const useMediaDeletion = ({
     }
 
     try {
-      const success = await deleteMediaItem(mediaId);
-      if (success) {
-        setShowDeleteModal(false);
-        onDeleteSuccess?.(mediaItem);
-      } else {
-        const error = "Failed to delete media";
-        onDeleteError?.(error);
-      }
+      await deleteVisibleMedia(mediaItem, mediaId);
+      setShowDeleteModal(false);
+      onDeleteSuccess?.(mediaItem);
     } catch (error: any) {
       const errorMessage = error.message || "Failed to delete media";
       console.error("❌ Delete failed:", errorMessage);
       onDeleteError?.(errorMessage);
     }
-  }, [mediaItem, deleteMediaItem, onDeleteSuccess, onDeleteError]);
+  }, [mediaItem, onDeleteSuccess, onDeleteError]);
 
   return {
     isOwner,

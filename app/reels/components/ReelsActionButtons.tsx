@@ -101,7 +101,8 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         flexDirection: "column",
         alignItems: "center",
         gap: getResponsiveSpacing(8, 10, 12),
-        zIndex: 20,
+        zIndex: 40,
+        elevation: 32,
       }}
     >
       <LikeHeartButton

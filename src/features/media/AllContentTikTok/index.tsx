@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { View } from "react-native";
+import { AppState, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { MediaItem } from "../../../shared/types";
@@ -25,7 +25,17 @@ import { ensurePlayingTrack } from "../../../shared/audio/playOrToggleTrack";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { useTypedCatalogInfiniteQuery } from "../../../shared/media/useTypedCatalogInfiniteQuery";
 import { rememberHomeFeedCategory } from "../../../shared/media/homeFeedCategory";
+import { markUnspecifiedCatalogItemsApproved } from "../../../shared/media/moderationStatus";
+import { syncApprovalEmails } from "../../../shared/notifications/approvalEmail";
 import { filterVisibleMedia } from "../../../shared/media/moderationVisibility";
+import {
+  forgetOwnUploads,
+  hydrateOwnUploads,
+  ingestAccountVideos,
+  mergeOwnUploads,
+  subscribeOwnUploads,
+} from "../../../shared/media/ownUploads";
+import { localMediaIds } from "../../../../app/utils/mediaDelete/mediaDeleteIds";
 import { weaveCatalogIntoFeed } from "../../../shared/utils/weaveCatalogIntoFeed";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { feedQueryContentType } from "./hooks/useAllContentTikTokFeedSource";
@@ -56,6 +66,7 @@ import {
 import { ContentErrorBoundary } from "../../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../../app/components/SuccessCard";
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
+import { apiClient } from "../../../../app/utils/dataFetching";
 import { useAuthorStoreVersion } from "../../../shared/author";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "@/store/useDownloadStore";
@@ -90,6 +101,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     user,
     authorStoreVersion
   );
+  const [ownUploadTick, setOwnUploadTick] = useState(0);
+  useEffect(() => {
+    void hydrateOwnUploads();
+    return subscribeOwnUploads(() => setOwnUploadTick((tick) => tick + 1));
+  }, []);
+  const syncOwnVideoEmails = useCallback(() => {
+    if (!currentUserId) return;
+    const name = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+    void apiClient
+      .getUserVideos(String(currentUserId), 1, 20)
+      .then((response) => {
+        if (!response?.success) return;
+        ingestAccountVideos(response.data?.videos, String(currentUserId));
+        void syncApprovalEmails(response.data?.videos, {
+          id: String(currentUserId),
+          name,
+        });
+      })
+      .catch(() => {});
+  }, [currentUserId, user?.firstName, user?.lastName]);
+  useEffect(() => {
+    syncOwnVideoEmails();
+  }, [syncOwnVideoEmails]);
   const liteActive = isLiteProfileActive();
   const listWindow = getLiteListWindow();
   const maxPlayers = FEED_HARD_MAX_PLAYERS;
@@ -129,12 +163,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   });
 
   const queryClient = useQueryClient();
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const handleDeleteSuccess = useCallback(
     (deleted?: MediaItem | { _id?: string; id?: string }) => {
-      const id = String(deleted?._id || (deleted as any)?.id || "").trim();
-      if (id) {
-        removeMediaFromFeedCaches(queryClient, id);
-      }
+      const ids = localMediaIds(deleted);
+      forgetOwnUploads(ids);
+      ids.forEach((id) => removeMediaFromFeedCaches(queryClient, id));
+      setSuccessMessage("Deleted successfully");
+      setShowSuccessCard(true);
       refreshFeedAfterDelete(queryClient);
       if (isSermonTab) {
         void sermonCatalog.refetch();
@@ -200,8 +237,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
-  const [showSuccessCard, setShowSuccessCard] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
   const toggleModal = useCallback((val: string | null) => {
     setModalVisible(val);
   }, []);
@@ -254,19 +289,32 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
    */
   const mediaList: MediaItem[] = useMemo(() => {
     if (isSermonTab) {
-      return filterVisibleMedia(sermonCatalog.items, currentUserId);
+      return mergeOwnUploads(
+        filterVisibleMedia(sermonCatalog.items, currentUserId),
+        (item) =>
+          ["sermon", "teachings", "devotional"].includes(
+            String(item.contentType || "").toLowerCase()
+          ),
+        currentUserId
+      );
     }
     if (isEbookTab) {
       return filterVisibleMedia(ebookCatalog.items, currentUserId);
     }
-    const discovery = buildStableFeedMediaList(defaultContent, allContent);
+    const discovery = markUnspecifiedCatalogItemsApproved(
+      buildStableFeedMediaList(defaultContent, allContent)
+    );
     const mixed = isAllTab
       ? weaveCatalogIntoFeed(discovery, [
           ...sermonCatalog.items,
           ...ebookCatalog.items,
         ])
       : discovery;
-    return filterVisibleMedia(mixed, currentUserId);
+    return mergeOwnUploads(
+      filterVisibleMedia(mixed, currentUserId),
+      undefined,
+      currentUserId
+    );
   }, [
     isSermonTab,
     isEbookTab,
@@ -276,7 +324,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     allContent,
     defaultContent,
     currentUserId,
+    ownUploadTick,
   ]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const name = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+    void syncApprovalEmails(mediaList, {
+      id: String(currentUserId),
+      name,
+    });
+  }, [currentUserId, mediaList, user?.firstName, user?.lastName]);
 
   const {
     filteredMediaList,
@@ -359,6 +417,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ebookCatalog.refetch,
     refreshAllContent,
   ]);
+
+  useEffect(() => {
+    let last = AppState.currentState;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (/inactive|background/.test(last) && next === "active") {
+        void refreshFeed();
+        syncOwnVideoEmails();
+      }
+      last = next;
+    });
+    return () => sub.remove();
+  }, [refreshFeed, syncOwnVideoEmails]);
 
   const {
     handleVideoTap,
@@ -555,7 +625,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [filteredMediaList]
   );
 
-  const { hasDeterminedVisibilityRef, viewabilityConfigCallbackPairs } =
+  const { hasDeterminedVisibilityRef, viewabilityConfigCallbackPairs, onFeedScrollState } =
     useFeedViewability({
       isFeedActiveRef,
       commentsOpenRef,
@@ -697,6 +767,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           drawDistance={listWindow.drawDistance}
           onEndReached={handleEndReached}
           viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+          onFeedScrollState={onFeedScrollState}
           renderContentByType={renderContentByType}
         />
         </View>

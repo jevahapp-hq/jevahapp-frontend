@@ -4,7 +4,9 @@
  * when this item's data changes, not when other items or global state changes.
  */
 import React from "react";
+import { View } from "react-native";
 import { canViewerSeeMedia } from "../../../../shared/media/moderationVisibility";
+import { isForgottenMedia } from "../../../../shared/media/ownUploads";
 import type { MediaItem } from "../../../../shared/types";
 import { detectMediaType, isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import EbookCard from "../../components/EbookCard";
@@ -87,6 +89,8 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     isFeedActive,
   } = props;
 
+  if (!item) return <View />;
+
   const key = getKey(item);
   const playbackKey = getPlaybackKey(item);
   const contentId = item._id || key;
@@ -168,6 +172,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
    * was stricter than `extractUploaderId`, so an owner whose id couldn't be
    * resolved from props lost sight of their own upload.
    */
+  if (isForgottenMedia(item)) return <View />;
   if (!canViewerSeeMedia(item as any, currentUserId)) {
     return <ContentUnavailableState />;
   }
@@ -207,6 +212,14 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
   }
 }
 
+function mediaUri(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "uri" in value) {
+    return String((value as { uri?: string }).uri || "");
+  }
+  return "";
+}
+
 /** Compare only item identity and item-specific state to avoid unnecessary re-renders */
 function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRendererProps): boolean {
   if (prev.item._id !== next.item._id || prev.index !== next.index) return false;
@@ -237,6 +250,10 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     prev.isFeedActive === next.isFeedActive &&
     prev.isAutoPlayEnabled === next.isAutoPlayEnabled &&
     prev.item.moderationStatus === next.item.moderationStatus &&
+    mediaUri(prev.item.fileUrl) === mediaUri(next.item.fileUrl) &&
+    mediaUri(prev.item.thumbnailUrl) === mediaUri(next.item.thumbnailUrl) &&
+    mediaUri(prev.item.imageUrl) === mediaUri(next.item.imageUrl) &&
+    mediaUri(prev.item.playbackUrl) === mediaUri(next.item.playbackUrl) &&
     prev.item.contentType === next.item.contentType &&
     (prev.item as { mediaType?: string }).mediaType ===
       (next.item as { mediaType?: string }).mediaType

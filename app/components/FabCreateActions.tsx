@@ -75,11 +75,11 @@ function ActionChip({
         onPressIn={() => {
           onPressInWarm?.();
           scale.value = withSpring(0.92, { damping: 14, stiffness: 420 });
+          onPress();
         }}
         onPressOut={() => {
           scale.value = withSpring(1, { damping: 12, stiffness: 280 });
         }}
-        onPress={onPress}
         style={[styles.chip, { backgroundColor }]}
         accessibilityRole="button"
         accessibilityLabel={label}

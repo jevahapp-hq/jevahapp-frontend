@@ -3,31 +3,35 @@ import { Pressable, type PressableProps } from "react-native";
 
 export type InstantPressableProps = PressableProps & {
   /**
-   * Fire `onPress` on touch down. Use for chrome (tabs, FABs) — not icons
-   * inside a scrolling list, where a drag would count as a tap.
+   * Fire `onPress` on touch down. Buttons and icons do this so the action
+   * happens as the finger lands. Hold gestures keep the release path.
    */
   pressOnTouchDown?: boolean;
 };
 
 /**
- * Zero-delay Pressable. Visual feedback starts immediately; the handler
- * still runs on `onPress` by default so scroll-vs-tap stays correct.
+ * Zero-delay Pressable. The handler runs on touch-down so a tap feels like
+ * a click on Android and iOS. A button that also has `onLongPress` still
+ * waits for release, so a hold is not also a tap.
  */
 export const InstantPressable = React.forwardRef<any, InstantPressableProps>(
   function InstantPressable(
-    { onPress, onPressIn, pressOnTouchDown = false, children, ...rest },
+    { onPress, onPressIn, onLongPress, pressOnTouchDown = true, disabled, children, ...rest },
     ref
   ) {
+    const fireOnTouchDown = pressOnTouchDown && !onLongPress && !disabled;
     return (
       <Pressable
         ref={ref}
         {...rest}
+        disabled={disabled}
+        onLongPress={onLongPress}
         unstable_pressDelay={0}
         android_disableSound
-        onPress={pressOnTouchDown ? undefined : onPress}
+        onPress={fireOnTouchDown ? undefined : onPress}
         onPressIn={(event) => {
           onPressIn?.(event);
-          if (pressOnTouchDown) onPress?.(event);
+          if (fireOnTouchDown) onPress?.(event);
         }}
       >
         {children}

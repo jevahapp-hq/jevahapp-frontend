@@ -9,6 +9,10 @@ const ANDROID_PACKAGE = {
   lite: "com.italgyirhrudhdhd.jevahapp.lite",
 };
 
+/** White launch screen with the Jevah icon and app name in the center. */
+const SPLASH_BACKGROUND = "#FFFFFF";
+const SPLASH_IMAGE = "./assets/images/splash-logo.png";
+
 /** EAS profile can set ANDROID_BUILD_ARCHS=arm64-v8a (smallest sideload) or armeabi-v7a,arm64-v8a (Play). */
 const androidBuildArchs = (process.env.ANDROID_BUILD_ARCHS || "arm64-v8a")
   .split(",")
@@ -26,9 +30,9 @@ export default {
     userInterfaceStyle: "light",
     backgroundColor: "#FCFCFD",
     splash: {
-      image: "./assets/images/splash-icon.png",
+      image: SPLASH_IMAGE,
       resizeMode: "contain",
-      backgroundColor: "#FCFCFD",
+      backgroundColor: SPLASH_BACKGROUND,
     },
     newArchEnabled: true,
     owner: "bldlne",
@@ -54,6 +58,7 @@ export default {
       bundleIdentifier: isLiteVariant
         ? "com.italgyirhrudhdhd.jevahapp.lite"
         : "com.italgyirhrudhdhd.jevahapp",
+      associatedDomains: ["applinks:jevahapp.com", "applinks:www.jevahapp.com"],
       infoPlist: {
         NSPhotoLibraryUsageDescription:
           "This app needs access to your photo and video library.",
@@ -62,13 +67,32 @@ export default {
         UIBackgroundModes: ["audio"],
       },
       splash: {
-        image: "./assets/images/splash-icon.png",
+        image: SPLASH_IMAGE,
         resizeMode: "contain",
-        backgroundColor: "#FCFCFD",
+        backgroundColor: SPLASH_BACKGROUND,
       },
     },
     android: {
       package: ANDROID_PACKAGE[appVariant],
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "jevahapp.com",
+              pathPrefix: "/content",
+            },
+            {
+              scheme: "https",
+              host: "www.jevahapp.com",
+              pathPrefix: "/content",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
       adaptiveIcon: {
         foregroundImage: "./assets/images/Jevah.png",
         backgroundColor: "#ffffff",
@@ -94,9 +118,9 @@ export default {
         backgroundColor: "#FCFCFD",
       },
       splash: {
-        image: "./assets/images/splash-icon.png",
+        image: SPLASH_IMAGE,
         resizeMode: "contain",
-        backgroundColor: "#FCFCFD",
+        backgroundColor: SPLASH_BACKGROUND,
       },
     },
     web: {
@@ -116,10 +140,14 @@ export default {
       [
         "expo-splash-screen",
         {
-          backgroundColor: "#FCFCFD",
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 180,
+          backgroundColor: SPLASH_BACKGROUND,
+          image: SPLASH_IMAGE,
+          imageWidth: 190,
           resizeMode: "contain",
+          dark: {
+            backgroundColor: SPLASH_BACKGROUND,
+            image: SPLASH_IMAGE,
+          },
         },
       ],
       [

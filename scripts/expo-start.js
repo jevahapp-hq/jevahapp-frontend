@@ -10,6 +10,9 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 
+require("./patch-logbox-stack");
+require("./patch-css-interop-safe-area");
+
 function applyEnvFile(envPath, { override } = { override: false }) {
   if (!fs.existsSync(envPath)) return;
   const text = fs.readFileSync(envPath, "utf8");
@@ -36,6 +39,18 @@ function loadEnvFile() {
   const root = path.join(__dirname, "..");
   applyEnvFile(path.join(root, ".env"));
   applyEnvFile(path.join(root, ".env.local"), { override: true });
+}
+
+function persistLanHostname(hostname) {
+  const envPath = path.join(__dirname, "..", ".env.local");
+  let text = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+  const line = `REACT_NATIVE_PACKAGER_HOSTNAME=${hostname}`;
+  if (/^REACT_NATIVE_PACKAGER_HOSTNAME=/m.test(text)) {
+    text = text.replace(/^REACT_NATIVE_PACKAGER_HOSTNAME=.*/m, line);
+  } else {
+    text = `${line}\n${text}`;
+  }
+  fs.writeFileSync(envPath, text);
 }
 
 function isUsableLanIp(address) {
@@ -136,6 +151,7 @@ if (!hostname) {
   process.env.REACT_NATIVE_PACKAGER_HOSTNAME = hostname;
   // Ensure Metro/Expo advertise this host in the QR / deep link.
   process.env.EXPO_PACKAGER_PROXY_URL = `http://${hostname}:8081`;
+  persistLanHostname(hostname);
   console.log(`Using LAN IP: ${hostname}`);
   console.log(`Metro will advertise: exp://${hostname}:8081`);
 }
@@ -153,14 +169,36 @@ const expoArgs = [
   "--dev-client",
   "--host",
   "lan",
+  "--port",
+  "8081",
   ...forwarded,
 ];
+
+process.env.BROWSER = "none";
+process.env.RCT_METRO_PORT = "8081";
+if (!process.env.NODE_OPTIONS) {
+  process.env.NODE_OPTIONS = "--max-old-space-size=8192";
+}
 
 const child = spawn("npx", expoArgs, {
   stdio: "inherit",
   shell: true,
   env: process.env,
 });
+
+// Metro often takes >60s to bind after a cold start. Delay so prewarm
+// does not give up before :8081 is listening.
+setTimeout(() => {
+  const prewarm = spawn(
+    process.execPath,
+    [path.join(__dirname, "prewarm-ios-bundle.js")],
+    {
+      stdio: "inherit",
+      env: process.env,
+    }
+  );
+  prewarm.on("error", () => {});
+}, 8000);
 
 child.on("exit", (code) => {
   process.exit(code ?? 0);

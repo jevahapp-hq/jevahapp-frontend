@@ -107,3 +107,14 @@ test("retries 404 and damaged cache instead of tearing down the player", () => {
   );
   assert.equal(isRetryableVideoSourceError(new Error("network")), false);
 });
+
+test("processing uploads play the original file instead of an unfinished HLS playlist", () => {
+  const url = getVideoUrlFromMedia({
+    contentType: "videos",
+    processingStatus: "processing",
+    fileUrl: "https://cdn.example.com/uploads/raw.mp4",
+    hlsUrl: "https://cdn.example.com/uploads/raw.m3u8",
+    lite: { preferHls: true },
+  });
+  assert.equal(url, "https://cdn.example.com/uploads/raw.mp4");
+});

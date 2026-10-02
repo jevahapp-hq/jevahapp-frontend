@@ -5,6 +5,7 @@
 import { Platform } from "react-native";
 import { API_BASE_URL } from "../constants";
 import type { MediaFile } from "../types";
+import { asUploadableVideoFile } from "../utils/asUploadableVideoFile";
 import { resolveUploadContentType } from "../utils/resolveUploadContentType";
 import { appendLocalFile, postMultipartForm } from "./appendLocalFile";
 
@@ -25,11 +26,12 @@ export async function buildUploadFormData({
   selectedType,
   selectedCategory,
 }: BuildUploadFormDataParams): Promise<FormData> {
+  const uploadFile = asUploadableVideoFile(file);
   const formData = new FormData();
   await appendLocalFile(formData, "file", {
-    uri: file.uri,
-    name: file.name,
-    mimeType: file.mimeType,
+    uri: uploadFile.uri,
+    name: uploadFile.name,
+    mimeType: uploadFile.mimeType,
   });
 
   if (thumbnail) {
@@ -38,6 +40,9 @@ export async function buildUploadFormData({
       name: thumbnail.name,
       mimeType: thumbnail.mimeType,
     });
+    if (thumbnail.thumbnailAspect) {
+      formData.append("thumbnailAspect", thumbnail.thumbnailAspect);
+    }
   }
 
   formData.append("title", title);
@@ -52,14 +57,14 @@ export async function buildUploadFormData({
     );
   }
 
-  if (file.mimeType) {
-    formData.append("mimeType", file.mimeType);
+  if (uploadFile.mimeType) {
+    formData.append("mimeType", uploadFile.mimeType);
   }
 
   // File MIME/extension + selected type — never title ("Book of Enoch" ≠ ebook)
   const resolved = resolveUploadContentType({
     selectedType,
-    file,
+    file: uploadFile,
     isSermonContent: selectedType === "sermon",
   });
   formData.append("contentType", resolved.contentType === "gif" ? "videos" : resolved.contentType);

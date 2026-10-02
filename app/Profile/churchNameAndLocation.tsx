@@ -1,32 +1,47 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
+import { useUserProfile } from "../hooks/useUserProfile";
 import type { SuggestSource } from "../hooks/useChurchSuggestions";
 import { useChurchSuggestions } from "../hooks/useChurchSuggestions";
 import { apiAxios } from "../utils/api";
+import {
+  churchesNearUser,
+  churchProfileUpdate,
+  isChurchPlaceName,
+  manualChurchChoice,
+  nearbyChurchBounds,
+  type ChurchEntitySource,
+} from "../utils/churchProfile";
 
 type Suggestion = {
   id: string;
   name: string;
   type: "church" | "branch";
-  source: SuggestSource; // "internal" | "mapbox"
+  source: SuggestSource | ChurchEntitySource;
+  distanceMeters?: number;
+  location?: { lat?: number; lng?: number } | null;
 };
 
 function ChurchNameAndLocation() {
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const editing = params.mode === "edit";
+  const { user, updateUserProfile } = useUserProfile();
+  const prefilled = useRef(false);
   const [search, setSearch] = useState("");
   const [filteredSuggestions, setFilteredSuggestions] = useState<Suggestion[]>(
     []
@@ -36,15 +51,9 @@ function ChurchNameAndLocation() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     null
   );
-
-  // Debug log for filtered suggestions
-  useEffect(() => {
-    console.log(
-      "Filtered suggestions updated:",
-      filteredSuggestions.length,
-      filteredSuggestions
-    );
-  }, [filteredSuggestions]);
+  const [countryCode, setCountryCode] = useState<string | undefined>(undefined);
+  const [manualOverride, setManualOverride] = useState(false);
+  const [mapSettledQuery, setMapSettledQuery] = useState("");
 
   useEffect(() => {
     const fetchLocation = async () => {
@@ -58,6 +67,12 @@ function ChurchNameAndLocation() {
         const lat = location.coords.latitude;
         const lng = location.coords.longitude;
         setCoords({ lat, lng });
+        const places = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lng,
+        });
+        const code = places?.[0]?.isoCountryCode;
+        if (code) setCountryCode(code);
       } catch (error) {
         console.error("Error getting location:", error);
       }
@@ -68,14 +83,14 @@ function ChurchNameAndLocation() {
   const { items: suggestionItems, loading: suggestLoading } =
     useChurchSuggestions(search, {
       near: coords || undefined,
-      countryCode: "NG",
+      countryCode,
       source: "combined",
       limit: 10,
     });
 
   useEffect(() => {
-    if (search.trim().length < 2) {
-      setFilteredSuggestions([]);
+    if (manualOverride || search.trim().length < 2) {
+      if (!manualOverride) setFilteredSuggestions([]);
       return;
     }
     const mapped: Suggestion[] = (suggestionItems || []).map((r: any) => ({
@@ -83,68 +98,135 @@ function ChurchNameAndLocation() {
       name: r.name,
       type: (r.type as "church" | "branch") || "church",
       source: (r.source as SuggestSource) || "internal",
+      distanceMeters: r.distanceMeters,
+      location: r.location,
     }));
-    setFilteredSuggestions(mapped);
-  }, [suggestionItems, search]);
+    setFilteredSuggestions(churchesNearUser(mapped, coords));
+  }, [suggestionItems, search, manualOverride, coords]);
 
-  // Optional Mapbox fallback if backend returns no results
   useEffect(() => {
-    const fetchMapboxFallback = async () => {
-      if (filteredSuggestions.length > 0) return;
-      const q = search.trim();
-      if (q.length < 2) return;
+    if (!editing || prefilled.current) return;
+    const existing = String(user?.location || "").trim();
+    if (!existing) return;
+    prefilled.current = true;
+    setSearch(existing);
+  }, [editing, user?.location]);
+
+  const typedName = search.trim();
+  const nearbyBackend = churchesNearUser(suggestionItems || [], coords);
+  const backendEmpty =
+    typedName.length >= 2 && !suggestLoading && nearbyBackend.length === 0;
+
+  // Map search stays inside the user's area. Add manually turns it off.
+  useEffect(() => {
+    if (manualOverride || !backendEmpty) return;
+    if (!coords) {
+      setMapSettledQuery(typedName);
+      return;
+    }
+    let cancelled = false;
+    const q = typedName;
+    const bounds = nearbyChurchBounds(coords);
+    const run = async () => {
       try {
-        const proximity = coords
-          ? `&proximity=${coords.lng},${coords.lat}&autocomplete=true`
-          : "";
+        const box = `&bbox=${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+        const proximity = `&proximity=${coords.lng},${coords.lat}&autocomplete=true`;
         const res = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
             q
-          )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=8${proximity}`
+          )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=poi&limit=8${proximity}${box}`
         );
-        if (!res.ok) return;
+        if (!res.ok || cancelled) return;
         const data = await res.json();
-        if (!Array.isArray(data?.features)) return;
-        const mapboxItems: Suggestion[] = data.features.map((f: any) => ({
-          id: f.id,
-          name: f.place_name,
-          type: "church", // default when not known
-          source: "mapbox",
-        }));
-        if (mapboxItems.length) setFilteredSuggestions(mapboxItems);
-      } catch (e) {
-        // silent fallback
+        if (!Array.isArray(data?.features) || cancelled) return;
+        const mapboxItems = churchesNearUser(
+          data.features
+            .map((f: any) => ({
+              id: String(f.id || ""),
+              name: String(f.place_name || f.text || ""),
+              type: "church" as const,
+              source: "mapbox" as const,
+              center: Array.isArray(f.center) ? f.center : null,
+            }))
+            .filter((item: { name: string }) => isChurchPlaceName(item.name)),
+          coords
+        );
+        if (!cancelled && mapboxItems.length) {
+          setFilteredSuggestions(mapboxItems);
+        }
+      } catch {
+        // No nearby church. The checkbox turns on manual entry.
+      } finally {
+        if (!cancelled) setMapSettledQuery(q);
       }
     };
-    fetchMapboxFallback();
-    // Only when backend produced none
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSuggestions.length, search, coords?.lat, coords?.lng]);
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [manualOverride, backendEmpty, typedName, coords]);
 
   const selectSuggestion = async (item: Suggestion) => {
+    setManualOverride(false);
     setSearch(item.name);
     setSelectedItem(item);
     setFilteredSuggestions([]);
   };
 
+  const toggleManual = () => {
+    setManualOverride((on) => {
+      const next = !on;
+      if (next) {
+        const name = search.trim();
+        setFilteredSuggestions([]);
+        setSelectedItem(
+          name.length >= 2
+            ? { id: "", name, type: "church", source: "manual" }
+            : null
+        );
+      } else {
+        setSelectedItem(null);
+      }
+      return next;
+    });
+  };
+
+  const choice = manualOverride
+    ? manualChurchChoice(typedName)
+    : selectedItem;
+  const searchFinished =
+    typedName.length >= 2 &&
+    !manualOverride &&
+    !suggestLoading &&
+    (nearbyBackend.length > 0 || mapSettledQuery === typedName);
+  const noChurchFound =
+    searchFinished && filteredSuggestions.length === 0 && !selectedItem;
+
   const handleNext = async () => {
-    if (!selectedItem?.name) {
-      Alert.alert("Please select a valid church or location");
+    const body = churchProfileUpdate(
+      choice
+        ? {
+            name: choice.name,
+            id: choice.id,
+            type: choice.type,
+            source: choice.source === "manual" ? "manual" : choice.source,
+          }
+        : null
+    );
+    if (!body) {
+      Alert.alert("Enter your church", "Search for it, or tick Add manually and type the name.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await apiAxios.post("/api/auth/complete-profile", {
-        location: selectedItem.name,
-        entityId: selectedItem.id,
-        entityType: selectedItem.type,
-        entitySource: selectedItem.source,
-      });
+      const response = await apiAxios.post("/api/auth/complete-profile", body);
 
       if (response.data.success) {
-        router.push("/avatars/indexAvatar");
+        updateUserProfile({ location: body.location });
+        if (editing) router.back();
+        else router.push("/avatars/indexAvatar");
       } else {
         Alert.alert("Error", response.data.message || "An error occurred");
       }
@@ -178,12 +260,12 @@ function ChurchNameAndLocation() {
       >
         <View className="w-full items-center">
           <View className="px-4 mt-6">
-            <AuthHeader title="Profile Setup" />
+            <AuthHeader title={editing ? "Edit church" : "Profile Setup"} />
           </View>
 
-          <ProgressBar currentStep={3} totalSteps={4} />
+          {editing ? null : <ProgressBar currentStep={3} totalSteps={4} />}
           <Text className="text-[#1D2939] font-semibold mt-3 ml-1">
-            Let&apos;s make this feel like home
+            {editing ? "Update your church" : "Let's make this feel like home"}
           </Text>
         </View>
 
@@ -196,9 +278,21 @@ function ChurchNameAndLocation() {
             <View className="flex flex-row items-center justify-between h-[72px] w-full mt-5 border rounded-3xl bg-white px-4 mb-2">
               <TextInput
                 className="flex-1 h-full text-base text-gray-800"
-                placeholder="Search church or location"
+                placeholder={
+                  manualOverride ? "Type your church name" : "Search churches near you"
+                }
                 onChangeText={(text) => {
                   setSearch(text);
+                  setMapSettledQuery("");
+                  const next = text.trim();
+                  if (manualOverride) {
+                    setSelectedItem(
+                      next.length >= 2
+                        ? { id: "", name: next, type: "church", source: "manual" }
+                        : null
+                    );
+                    return;
+                  }
                   setSelectedItem(null);
                 }}
                 value={search}
@@ -216,9 +310,39 @@ function ChurchNameAndLocation() {
               <Ionicons name="search" size={32} color="#6B7280" />
             </View>
 
+            <TouchableOpacity
+              onPress={toggleManual}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: manualOverride }}
+              className="flex-row items-center mt-3 mb-1"
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 4,
+                  borderWidth: 2,
+                  borderColor: "#090E24",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: manualOverride ? "#090E24" : "#FFFFFF",
+                }}
+              >
+                {manualOverride ? (
+                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                ) : null}
+              </View>
+              <Text className="ml-3 text-[#1D2939] text-base">Add manually</Text>
+            </TouchableOpacity>
+            {manualOverride ? (
+              <Text className="text-[#475467] mt-1 mb-1">
+                Map search is off. Type the church name, then continue.
+              </Text>
+            ) : null}
+
             <View className="flex-1 mt-2">
               <FlatList
-                data={filteredSuggestions}
+                data={manualOverride ? [] : filteredSuggestions}
                 keyExtractor={(item) => item.id}
                 keyboardShouldPersistTaps="handled"
                 style={{ maxHeight: 200 }}
@@ -233,14 +357,18 @@ function ChurchNameAndLocation() {
                       style={{ fontSize: 16 }}
                     >
                       {item.name}
-                      {item.type === "location" ? " (Location)" : ""}
+                      {typeof item.distanceMeters === "number"
+                        ? item.distanceMeters < 1000
+                          ? ` · ${Math.round(item.distanceMeters)} m`
+                          : ` · ${(item.distanceMeters / 1000).toFixed(1)} km`
+                        : ""}
                     </Text>
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
-                  search.trim().length > 0 ? (
-                    <Text className="text-center text-gray-500 mt-4">
-                      No matches found
+                  noChurchFound ? (
+                    <Text className="text-center text-[#1D2939] text-base font-semibold mt-6">
+                      No church found
                     </Text>
                   ) : null
                 }
@@ -250,7 +378,7 @@ function ChurchNameAndLocation() {
           </View>
         </View>
 
-        {selectedItem && (
+        {choice && typedName.length >= 2 ? (
           <View className="absolute left-0 right-0 bottom-6 items-center">
             <TouchableOpacity
               onPress={handleNext}
@@ -260,11 +388,11 @@ function ChurchNameAndLocation() {
               disabled={loading}
             >
               <Text className="text-white text-center text-base font-semibold">
-                {loading ? "Submitting..." : "Next"}
+                {loading ? "Saving..." : editing ? "Save" : "Next"}
               </Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

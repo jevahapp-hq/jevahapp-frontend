@@ -3,6 +3,7 @@
  * and resume from the same second instead of jumping back to 0.
  */
 import { fixOverEncodedMediaUrl } from "../../../shared/utils/videoUrlManager";
+import { FEED_VIDEO_START_POSITION_SECONDS } from "./feedVideoConfig";
 
 const playheads = new Map<string, number>();
 const MAX = 80;
@@ -32,4 +33,14 @@ export function clearPlayhead(url: string | null | undefined): void {
   const key = playheadKey(url);
   if (!key) return;
   playheads.delete(key);
+}
+
+/**
+ * Where a remounted card should open. A saved playhead wins. Otherwise
+ * start just past 0 so the surface does not repaint the cover frame.
+ */
+export function feedStartSeconds(url: string | null | undefined): number {
+  const saved = getPlayhead(url);
+  if (saved > FEED_VIDEO_START_POSITION_SECONDS) return saved;
+  return FEED_VIDEO_START_POSITION_SECONDS;
 }

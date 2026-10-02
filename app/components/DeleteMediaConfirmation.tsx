@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { deleteMedia, adminDeleteContent } from "../utils/mediaDeleteAPI";
-import TopToast from "./TopToast";
-
+import { adminDeleteContent } from "../utils/mediaDeleteAPI";
+import { deleteVisibleMedia } from "../utils/mediaDelete/deleteOperations";
+import { collectMediaDeleteIds } from "../utils/mediaDelete/mediaDeleteIds";
 interface DeleteMediaConfirmationProps {
   visible: boolean;
   mediaId: string;
+  /** Full post, so delete can try the file id when the row id is not the media id. */
+  mediaItem?: unknown;
   mediaTitle: string;
   onClose: () => void;
   onSuccess: () => void;
@@ -25,6 +26,7 @@ interface DeleteMediaConfirmationProps {
 export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = ({
   visible,
   mediaId,
+  mediaItem,
   mediaTitle,
   onClose,
   onSuccess,
@@ -32,7 +34,6 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [hasDeleted, setHasDeleted] = useState(false);
 
   const handleDelete = async () => {
@@ -46,29 +47,25 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
 
     try {
       // Use admin delete endpoint if user is admin, otherwise use regular delete
-      const result = isAdmin 
-        ? await adminDeleteContent(mediaId)
-        : await deleteMedia(mediaId);
+      const ids = collectMediaDeleteIds(mediaItem || mediaId);
+      const result = isAdmin
+        ? await adminDeleteContent(ids[0] || mediaId)
+        : await deleteVisibleMedia(mediaItem || mediaId, mediaId);
       
       if (result.success) {
         setHasDeleted(true);
-        setShowSuccessToast(true);
-        // Instant remove like TikTok/IG — parent strips item from feed immediately
         onSuccess();
         onClose();
       }
     } catch (err: any) {
-      // Only show error if it's not a 404 for an already-deleted item
       const errorMessage = err.message || "Failed to delete media";
-      if (!errorMessage.includes("already been deleted") && !errorMessage.includes("not found")) {
-        setError(errorMessage);
-        console.error("Delete failed:", err);
-      } else {
-        // Media was already deleted, treat as success (suppress redundant error)
+      if (errorMessage.includes("already been deleted")) {
         setHasDeleted(true);
-        setShowSuccessToast(true);
         onSuccess();
         onClose();
+      } else {
+        setError(errorMessage);
+        console.error("Delete failed:", err);
       }
     } finally {
       setIsLoading(false);
@@ -129,15 +126,6 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
           </View>
         </View>
       </View>
-      
-      {/* Success Toast Notification */}
-      <TopToast
-        visible={showSuccessToast}
-        text={isAdmin ? "Content deleted successfully" : "Media deleted successfully"}
-        type="success"
-        topOffset={20}
-        onClose={() => setShowSuccessToast(false)}
-      />
     </Modal>
   );
 };

@@ -1,6 +1,8 @@
 import type { MutableRefObject } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Router } from "expo-router";
+import { rememberOwnUpload } from "../../../../../src/shared/media/ownUploads";
+import { syncApprovalEmails } from "../../../../../src/shared/notifications/approvalEmail";
 import type { MediaItem } from "../../../../../src/shared/types";
 import {
   prependMediaToFeedCaches,
@@ -8,7 +10,6 @@ import {
   patchMediaInFeedCaches,
 } from "../../../../../src/shared/utils/prependMediaToFeedCaches";
 import { buildSuccessResult } from "../../components/UploadResultModal";
-import { resolveUploadContentType } from "../../utils/resolveUploadContentType";
 import {
   isMediaSeekable,
   pollMediaUntilSeekable,
@@ -87,10 +88,8 @@ export function scheduleUploadSuccessNavigation(params: {
   const {
     router,
     queryClient,
-    selectedType,
     feedItem,
     file,
-    isSermonContent,
     resetForm,
     setLoading,
     setUploadState,
@@ -107,13 +106,30 @@ export function scheduleUploadSuccessNavigation(params: {
   setUploadState({
     status: "success",
     progress: 100,
-    message: stillProcessing
-      ? "Uploaded! Processing video for scrubbing…"
-      : "Content has been verified and approved!",
+    message: "Successfully posted",
   });
 
+  rememberOwnUpload(feedItem);
+  const uploadedBy = feedItem.uploadedBy;
+  const ownerId =
+    (typeof uploadedBy === "object" && uploadedBy
+      ? uploadedBy._id
+      : undefined) || feedItem.userId;
+  const ownerName =
+    typeof uploadedBy === "object" && uploadedBy
+      ? [uploadedBy.firstName, uploadedBy.lastName].filter(Boolean).join(" ")
+      : feedItem.uploadedByName || "";
+  if (ownerId) {
+    void syncApprovalEmails(
+      [feedItem],
+      { id: String(ownerId), name: ownerName },
+      { justUploaded: true }
+    );
+  }
   prependMediaToFeedCaches(queryClient, feedItem);
   refreshFeedAfterUpload(queryClient);
+  void queryClient.invalidateQueries({ queryKey: ["account-videos"] });
+  void queryClient.invalidateQueries({ queryKey: ["account-media"] });
 
   const isVideo =
     (file.mimeType || "").startsWith("video/") ||
@@ -131,13 +147,6 @@ export function scheduleUploadSuccessNavigation(params: {
     seedDurationCache(String(feedItem._id || ""), Number(feedItem.duration));
   }
 
-  const defaultCategory = resolveUploadContentType({
-    selectedType,
-    file,
-    apiContentType: feedItem.contentType,
-    isSermonContent,
-  }).homeCategory;
-
   const navigateToFeed = () => {
     if (successNavigateTimeoutRef.current) {
       clearTimeout(successNavigateTimeoutRef.current);
@@ -149,7 +158,7 @@ export function scheduleUploadSuccessNavigation(params: {
       pathname: "/categories/HomeScreen",
       params: {
         default: "Home",
-        defaultCategory,
+        defaultCategory: "ALL",
       },
     });
   };

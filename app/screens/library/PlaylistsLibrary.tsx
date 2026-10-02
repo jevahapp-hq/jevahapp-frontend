@@ -2,13 +2,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Image,
-  Modal,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -22,6 +19,7 @@ import {
   playPlaylistQueue,
 } from "../../utils/openPlaylistNowPlaying";
 import { PlaylistDetailSheet } from "./components/PlaylistDetailSheet";
+import { SongModalCreatePlaylist } from "@/shared/components/CopyrightFreeSongModal/SongModalCreatePlaylist";
 
 export default function PlaylistsLibrary() {
   const { playlists, loadPlaylistsFromBackend } = usePlaylistStore();
@@ -509,240 +507,20 @@ export default function PlaylistsLibrary() {
         />
       )}
 
-      {/* Create Playlist Modal - Sleek Spotify-like Design */}
-      <Modal
+      <SongModalCreatePlaylist
         visible={showCreateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
+        playlistName={newPlaylistName}
+        playlistDescription={newPlaylistDescription}
+        isLoading={isLoading}
+        onNameChange={setNewPlaylistName}
+        onDescriptionChange={setNewPlaylistDescription}
+        onCreate={handleCreatePlaylist}
+        onCancel={() => {
           setShowCreateModal(false);
           setNewPlaylistName("");
           setNewPlaylistDescription("");
         }}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => {
-            setShowCreateModal(false);
-            setNewPlaylistName("");
-            setNewPlaylistDescription("");
-          }}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
-            paddingVertical: 40,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: 24,
-              width: "100%",
-              maxWidth: 420,
-              paddingTop: 28,
-              paddingBottom: 24,
-              paddingHorizontal: 24,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 24,
-              elevation: 16,
-            }}
-          >
-            {/* Header with Close Button */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 24,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 24,
-                  fontFamily: "PlusJakartaSans-Bold",
-                  color: "#111827",
-                  letterSpacing: -0.5,
-                }}
-              >
-                Create playlist
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCreateModal(false);
-                  setNewPlaylistName("");
-                  setNewPlaylistDescription("");
-                }}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#F3F4F6",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Ionicons name="close" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Playlist Name Input */}
-            <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontFamily: "PlusJakartaSans-SemiBold",
-                  color: "#374151",
-                  marginBottom: 8,
-                  letterSpacing: 0.2,
-                }}
-              >
-                Playlist name
-              </Text>
-              <TextInput
-                value={newPlaylistName}
-                onChangeText={setNewPlaylistName}
-                placeholder="My playlist"
-                placeholderTextColor="#9CA3AF"
-                style={{
-                  backgroundColor: "#F9FAFB",
-                  borderWidth: 1,
-                  borderColor: "#E5E7EB",
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  fontSize: 16,
-                  fontFamily: "PlusJakartaSans",
-                  color: "#111827",
-                }}
-                autoFocus
-              />
-            </View>
-
-            {/* Description Input */}
-            <View style={{ marginBottom: 28 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontFamily: "PlusJakartaSans-SemiBold",
-                  color: "#374151",
-                  marginBottom: 8,
-                  letterSpacing: 0.2,
-                }}
-              >
-                Description <Text style={{ color: "#9CA3AF", fontWeight: "400" }}>(optional)</Text>
-              </Text>
-              <TextInput
-                value={newPlaylistDescription}
-                onChangeText={setNewPlaylistDescription}
-                placeholder="Add a description"
-                placeholderTextColor="#9CA3AF"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                style={{
-                  backgroundColor: "#F9FAFB",
-                  borderWidth: 1,
-                  borderColor: "#E5E7EB",
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  fontSize: 16,
-                  fontFamily: "PlusJakartaSans",
-                  color: "#111827",
-                  minHeight: 80,
-                }}
-              />
-            </View>
-
-            {/* Action Buttons */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCreateModal(false);
-                  setNewPlaylistName("");
-                  setNewPlaylistDescription("");
-                }}
-                disabled={isLoading}
-                style={{
-                  flex: 1,
-                  backgroundColor: "#F3F4F6",
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: isLoading ? 0.5 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontFamily: "PlusJakartaSans-SemiBold",
-                    color: "#374151",
-                  }}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleCreatePlaylist}
-                disabled={isLoading || !newPlaylistName.trim()}
-                style={{
-                  flex: 1,
-                  backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: isLoading || !newPlaylistName.trim() ? 0.6 : 1,
-                  shadowColor: UI_CONFIG.COLORS.SECONDARY,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 4,
-                }}
-              >
-                {isLoading ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontFamily: "PlusJakartaSans-SemiBold",
-                        color: "#FFFFFF",
-                      }}
-                    >
-                      Creating...
-                    </Text>
-                  </View>
-                ) : (
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontFamily: "PlusJakartaSans-SemiBold",
-                      color: "#FFFFFF",
-                    }}
-                  >
-                    Create
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      />
 
       <PlaylistDetailSheet
         visible={showPlaylistDetail}

@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { bibleApiService, BibleVerse } from "../../services/bibleApiService";
+import { useBibleReadingStyle } from "../../utils/bibleReadingStyle";
 
 interface BibleVerseSelectorProps {
   bookName: string;
@@ -29,6 +30,7 @@ export default function BibleVerseSelector({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const reading = useBibleReadingStyle();
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -75,7 +77,18 @@ export default function BibleVerseSelector({
         <View style={styles.verseBadge}>
           <Text style={styles.verseBadgeText}>{item.verseNumber}</Text>
         </View>
-        <Text style={styles.versePreview} numberOfLines={2} ellipsizeMode="tail">
+        <Text
+          style={[
+            styles.versePreview,
+            {
+              fontFamily: reading.fontFamily,
+              fontSize: Math.max(14, reading.fontSize - 1),
+              lineHeight: reading.lineHeight,
+            },
+          ]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
           {item.text}
         </Text>
         <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
@@ -129,6 +142,7 @@ export default function BibleVerseSelector({
 
       <FlatList
         data={verses}
+        extraData={`${reading.fontId}-${reading.fontSize}`}
         renderItem={renderVerseItem}
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}

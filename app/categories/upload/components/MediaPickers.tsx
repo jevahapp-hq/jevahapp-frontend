@@ -11,6 +11,7 @@ import {
   getResponsiveSpacing,
 } from "../../../../utils/responsive";
 import type { MediaFile } from "../types";
+import { thumbnailPreviewRatio } from "../utils/thumbnailAspect";
 import { isVideoMediaFile } from "../utils/fileTypeDetection";
 import { collectDeviceGuidelineErrors } from "../utils/uploadGuidelineAlert";
 import { MediaVideoPreview } from "./MediaVideoPreview";
@@ -42,7 +43,7 @@ export function MediaPickers(props: MediaPickersProps) {
     : null;
 
   return (
-    <View style={[styles.row, { paddingHorizontal: pad, gap }]}>
+    <View style={[styles.row, { paddingHorizontal: pad, gap, alignItems: "flex-start" }]}>
       <TouchableOpacity
         onPress={onPickMedia}
         style={styles.tile}
@@ -74,7 +75,11 @@ export function MediaPickers(props: MediaPickersProps) {
 
       <TouchableOpacity
         onPress={onPickThumbnail}
-        style={[styles.tile, styles.thumbTile]}
+        style={[
+          styles.tile,
+          styles.thumbTile,
+          { aspectRatio: thumbnailPreviewRatio(thumbnail?.thumbnailAspect) },
+        ]}
         activeOpacity={0.8}
         accessibilityLabel="Select cover photo (optional)"
       >
@@ -89,7 +94,7 @@ export function MediaPickers(props: MediaPickersProps) {
           <Image
             source={{ uri: thumbnail.uri || undefined }}
             style={styles.fill}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         )}
       </TouchableOpacity>

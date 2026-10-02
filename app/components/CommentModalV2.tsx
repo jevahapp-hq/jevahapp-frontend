@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -84,11 +83,9 @@ export default function CommentModalV2() {
       setShellReady(true);
       return;
     }
-    const task = InteractionManager.runAfterInteractions(() => setShellReady(true));
-    const fallback = setTimeout(() => setShellReady(true), 500);
+    const task = setTimeout(() => setShellReady(true), 0);
     return () => {
-      task.cancel();
-      clearTimeout(fallback);
+      clearTimeout(task);
     };
   }, [isVisible]);
 

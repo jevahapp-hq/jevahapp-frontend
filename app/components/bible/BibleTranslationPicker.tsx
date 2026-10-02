@@ -53,8 +53,9 @@ export default function BibleTranslationPicker({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+    <View style={styles.root}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close translation list" />
+      <View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.title}>Translation</Text>
           <Text style={styles.subtitle}>
@@ -133,20 +134,23 @@ export default function BibleTranslationPicker({
               );
             })}
           </ScrollView>
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+          <Pressable style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close">
             <Text style={styles.closeText}>Close</Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
+          </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   sheet: {
     backgroundColor: "#FFFFFF",
@@ -156,6 +160,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingTop: 8,
     maxHeight: "72%",
+    zIndex: 2,
   },
   handle: {
     alignSelf: "center",

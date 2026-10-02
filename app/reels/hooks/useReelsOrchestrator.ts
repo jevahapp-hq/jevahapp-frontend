@@ -29,7 +29,12 @@ import { useReelsResponsive } from "./useReelsResponsive";
 import { useReelsScroll } from "./useReelsScroll";
 import { useReelsVideoList } from "./useReelsVideoList";
 import { useReelsVideoPlayback } from "./useReelsVideoPlayback";
+import { getCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
 import { resolveReelsStartIndex } from "../../../src/features/media/video-feed";
+import { normalizeDurationMs } from "../../../src/shared/media/normalizeDurationMs";
+import { isForgottenMedia } from "../../../src/shared/media/ownUploads";
+import { localMediaIds } from "../../utils/mediaDelete/mediaDeleteIds";
+import { setAndroidAudibleReel } from "../reelAudible";
 
 /**
  * useReelsOrchestrator - The "Master Hook" for the Reels feature.
@@ -230,27 +235,30 @@ export function useReelsOrchestrator() {
 
     /** After API delete succeeds — remove instantly from Reels + feed caches (no second delete call). */
     const handleDeleteSuccessUi = useCallback(() => {
-        const id = String(current.currentVideo?._id || "").trim();
         setMenuVisible(false);
         closeDeleteModal();
-        if (id) {
-            reelsStore.removeVideoById(id);
-            removeMediaFromFeedCaches(queryClient, id);
-            refreshFeedAfterDelete(queryClient);
+        const previous = useReelsStore.getState().videoList;
+        const removed = previous.filter((video) => isForgottenMedia(video));
+        const next = previous.filter((video) => !removed.includes(video));
+        const currentIndex = useReelsStore.getState().currentIndex;
+        reelsStore.setVideoList(next);
+        reelsStore.setCurrentIndex(
+            Math.min(currentIndex, Math.max(0, next.length - 1))
+        );
+        const droppedIds = new Set<string>();
+        for (const video of removed) {
+            localMediaIds(video).forEach((id) => droppedIds.add(id));
         }
+        droppedIds.forEach((id) => removeMediaFromFeedCaches(queryClient, id));
+        refreshFeedAfterDelete(queryClient);
+        setSuccessMessage("Deleted successfully");
+        setShowSuccessCard(true);
         const remaining = useReelsStore.getState().videoList;
-        const nextIndex = useReelsStore.getState().currentIndex;
-        setCurrentIndex_state(nextIndex);
+        setCurrentIndex_state(useReelsStore.getState().currentIndex);
         if (remaining.length === 0) {
-            router.back();
+            setTimeout(() => router.back(), 1500);
         }
-    }, [
-        current.currentVideo?._id,
-        closeDeleteModal,
-        queryClient,
-        reelsStore,
-        router,
-    ]);
+    }, [closeDeleteModal, queryClient, reelsStore, router]);
 
     // Stable identity: this is passed down into the player's listener effect,
     // and a fresh function each render re-subscribed the native listeners.
@@ -310,9 +318,14 @@ export function useReelsOrchestrator() {
         setShowSuccessCard,
     });
 
+    const knownDurationMs =
+        getCachedDurationMs(current.contentIdForHooks) ||
+        normalizeDurationMs(current.currentVideo?.duration);
+
     const playback = useReelsVideoPlayback({
         videoRefs: videoRefs as RefObject<Record<string, VideoPlayer>>,
         videoDuration,
+        knownDurationMs,
         modalKey: current.modalKey,
         setVideoDuration,
         setVideoPosition,
@@ -333,18 +346,21 @@ export function useReelsOrchestrator() {
         userHasManuallyPaused,
         globalVideoStore,
         pendingStartIndexRef,
+        videoRefs,
+        clearManualPause: () => setUserHasManuallyPaused(false),
     });
 
-    const toggleVideoPlay = useCallback(() => {
-        const key = current.modalKey;
-        const isPlaying = useGlobalVideoStore.getState().playingVideos[key] ?? false;
+    const toggleVideoPlay = useCallback((key?: string) => {
+        const target = key || current.modalKey;
+        const isPlaying = useGlobalVideoStore.getState().playingVideos[target] ?? false;
         if (isPlaying) {
-            pauseVideo(key);
+            pauseVideo(target);
             setUserHasManuallyPaused(true);
             setShowPauseOverlay(true);
             setTimeout(() => setShowPauseOverlay(false), 1000);
         } else {
-            playVideoGlobally(key);
+            setAndroidAudibleReel(target);
+            playVideoGlobally(target);
             setUserHasManuallyPaused(false);
             setShowPauseOverlay(false);
         }
@@ -353,15 +369,12 @@ export function useReelsOrchestrator() {
     // Memoized: a fresh array literal here re-created the FlatList `data` and
     // the prefetch dep on every render, turning any single state tick into a
     // full-list re-render.
-    const allVideos = useMemo(
-        () =>
-            parsedVideoList.length > 0
-                ? parsedVideoList
-                : current.currentVideo
-                  ? [current.currentVideo]
-                  : [],
-        [parsedVideoList, current.currentVideo]
-    );
+    const allVideos = useMemo(() => {
+        if (parsedVideoList.length > 0) return parsedVideoList;
+        if (isForgottenMedia(current.currentVideo)) return [];
+        if (reelsStore.videoList.length > 0) return [];
+        return current.currentVideo ? [current.currentVideo] : [];
+    }, [parsedVideoList, current.currentVideo, reelsStore.videoList.length]);
 
     useReelsAdjacentPrefetch({
         currentIndex: currentIndex_state,

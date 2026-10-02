@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, Platform, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { TapGestureHandler } from "react-native-gesture-handler";
+import { NativeViewGestureHandler, TapGestureHandler } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { triggerHapticFeedback } from "../../src/shared/utils/haptics";
@@ -18,11 +18,203 @@ import {
   pausePlaybackSession,
   setMiniPlayerSuppression,
 } from "../../src/shared/audio";
+import { dismissReadingNarration } from "../../src/shared/audio/dismissReadingNarration";
 import { useEbookReaderViewTracking } from "./hooks/useEbookReaderViewTracking";
 import { usePdfChapterExtraction } from "./hooks/usePdfChapterExtraction";
 import { rememberHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
+import { pageFromScrollPosition, pdfPageCountFromSnippet } from "./pdfPageFromTap";
 
 const EbookReadAloud = lazy(() => import("./EbookReadAloud"));
+
+/**
+ * Runs inside the PDF viewer. Google's viewer draws each page as an image
+ * labeled "Page N of M". A tap posts that page; scrolling posts the page
+ * that is actually on screen.
+ */
+const PDF_PAGE_TAP_SCRIPT = `
+(function() {
+  if (window.__jevahPdfTapWatch) return;
+  window.__jevahPdfTapWatch = true;
+  var lastPage = 0;
+  var scrollAtTap = 0;
+
+  function send(payload) {
+    if (!window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) return;
+    payload.source = "jevah-tap";
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+  }
+
+  function parsePageLabel(text) {
+    if (!text) return null;
+    var match = String(text).match(/Page\\s+(\\d+)\\s+of\\s+(\\d+)/i);
+    if (!match) return null;
+    var page = parseInt(match[1], 10);
+    var total = parseInt(match[2], 10);
+    if (!(page > 0)) return null;
+    return { page: page, total: total > 0 ? total : 0 };
+  }
+
+  function fromNode(node) {
+    var current = node;
+    var depth = 0;
+    while (current && depth < 8) {
+      if (current.alt) {
+        var fromAlt = parsePageLabel(current.alt);
+        if (fromAlt) return fromAlt;
+      }
+      if (current.getAttribute) {
+        var fromAria = parsePageLabel(current.getAttribute("aria-label"));
+        if (fromAria) return fromAria;
+      }
+      current = current.parentElement;
+      depth++;
+    }
+    return null;
+  }
+
+  function pageAtPoint(x, y) {
+    if (typeof x === "number" && typeof y === "number" && document.elementFromPoint) {
+      var direct = fromNode(document.elementFromPoint(x, y));
+      if (direct) return direct;
+    }
+    if (typeof x !== "number" || typeof y !== "number") return null;
+    var imgs = document.querySelectorAll("img");
+    var best = null;
+    var bestArea = Infinity;
+    for (var i = 0; i < imgs.length; i++) {
+      var label = parsePageLabel(imgs[i].alt);
+      if (!label) continue;
+      var rect = imgs[i].getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
+      var area = rect.width * rect.height;
+      if (area < bestArea) {
+        bestArea = area;
+        best = label;
+      }
+    }
+    return best;
+  }
+
+  function pageMostVisible() {
+    var imgs = document.querySelectorAll("img");
+    var best = null;
+    var bestArea = 0;
+    var viewH = window.innerHeight || 0;
+    var viewW = window.innerWidth || 0;
+    for (var i = 0; i < imgs.length; i++) {
+      var label = parsePageLabel(imgs[i].alt);
+      if (!label) continue;
+      var rect = imgs[i].getBoundingClientRect();
+      var top = Math.max(rect.top, 0);
+      var bottom = Math.min(rect.bottom, viewH);
+      var left = Math.max(rect.left, 0);
+      var right = Math.min(rect.right, viewW);
+      var area = Math.max(0, bottom - top) * Math.max(0, right - left);
+      if (area > bestArea) {
+        bestArea = area;
+        best = label;
+      }
+    }
+    if (best) return best;
+    var input = document.querySelector('input[aria-label^="Page"]');
+    if (input) {
+      var n = parseInt(input.value, 10);
+      if (n > 0) {
+        var total = 0;
+        if (imgs.length) {
+          var labeled = parsePageLabel(imgs[0].alt);
+          if (labeled) total = labeled.total;
+        }
+        return { page: n, total: total };
+      }
+    }
+    return null;
+  }
+
+  function scrollMarker() {
+    var top = window.pageYOffset || 0;
+    var nodes = document.querySelectorAll("div");
+    for (var i = 0; i < nodes.length; i++) {
+      var nodeTop = nodes[i].scrollTop || 0;
+      if (nodeTop > top) top = nodeTop;
+    }
+    return top;
+  }
+
+  function reportVisible() {
+    var found = pageMostVisible();
+    if (!found) {
+      sendMetrics();
+      return;
+    }
+    if (found.page !== lastPage && Math.abs(scrollMarker() - scrollAtTap) < 24) return;
+    if (found.page === lastPage) return;
+    lastPage = found.page;
+    send({ type: "pageChange", page: found.page, totalPages: found.total || 0 });
+  }
+
+  function sendMetrics() {
+    var el = document.scrollingElement || document.documentElement || document.body;
+    var top = window.pageYOffset || (el && el.scrollTop) || 0;
+    var height = el ? el.scrollHeight : 0;
+    var view = window.innerHeight || 0;
+    var width = window.innerWidth || 0;
+    var nodes = document.querySelectorAll("div");
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node.scrollHeight > height && node.clientHeight > view * 0.45) {
+        height = node.scrollHeight;
+        top = node.scrollTop || 0;
+        view = node.clientHeight || view;
+      }
+    }
+    if (!(height > view * 1.15)) return;
+    send({ type: "pdfMetrics", top: top, height: height, view: view, width: width });
+  }
+
+  window.__jevahReportPdfPage = function(clientY, clientX) {
+    scrollAtTap = scrollMarker();
+    var found = pageAtPoint(clientX, clientY);
+    if (found) {
+      lastPage = found.page;
+      send({ type: "pageClick", page: found.page, totalPages: found.total || 0 });
+      return;
+    }
+    send({ type: "tapPoint", x: clientX || 0, y: clientY || 0 });
+  };
+
+  var touchStartX = null;
+  var touchStartY = null;
+  document.addEventListener("touchstart", function(e) {
+    var t = e.touches && e.touches[0];
+    touchStartX = t ? t.clientX : null;
+    touchStartY = t ? t.clientY : null;
+  }, true);
+  function onTap(x, y) {
+    if (touchStartY != null && y != null && Math.abs(y - touchStartY) > 18) return;
+    if (touchStartX != null && x != null && Math.abs(x - touchStartX) > 18) return;
+    window.__jevahReportPdfPage(y, x);
+  }
+  document.addEventListener("click", function(e) {
+    onTap(e.clientX, e.clientY);
+  }, true);
+  document.addEventListener("touchend", function(e) {
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    onTap(t.clientX, t.clientY);
+  }, true);
+
+  var scrollTimer = null;
+  function onScroll() {
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(reportVisible, 70);
+  }
+  window.addEventListener("scroll", onScroll, true);
+  document.addEventListener("scroll", onScroll, true);
+  setInterval(reportVisible, 450);
+})();
+true;
+`;
 const PdfJsExtractorWebView = lazy(() => import("./pdfText/PdfJsExtractorWebView"));
 
 // Decode URL-encoded text (like the %20 for spaces, %E2%80%99 for special chars)
@@ -164,9 +356,19 @@ export default function PdfViewer() {
   const [listenMode, setListenMode] = useState(false);
   const [listenStartPage, setListenStartPage] = useState(1);
   const [audioStartPage, setAudioStartPage] = useState<number | null>(null);
-  const [pageInput, setPageInput] = useState("");
+  const [pageInput, setPageInput] = useState("1");
   const [showDoubleTapHint, setShowDoubleTapHint] = useState(false);
   const currentViewingPageRef = useRef(1);
+  const totalPagesRef = useRef(0);
+  const pageInputFocusedRef = useRef(false);
+  const webViewRef = useRef<WebView>(null);
+  const doubleTapRef = useRef<any>(null);
+  const nativeScrollRef = useRef<any>(null);
+  const scrollMetricsRef = useRef({ y: 0, height: 0, viewH: 0, viewW: 0 });
+  const webPageReportsRef = useRef(false);
+  const tapHoldUntilRef = useRef(0);
+  const scrollYAtTapRef = useRef(0);
+  const lastTapFillAtRef = useRef(0);
 
   const {
     status: extractionStatus,
@@ -190,6 +392,7 @@ export default function PdfViewer() {
   });
 
   currentViewingPageRef.current = currentViewingPage;
+  totalPagesRef.current = totalPages;
 
   const markAudioStartPage = useCallback((page: number) => {
     const n = Math.max(1, Math.round(Number(page)) || 1);
@@ -211,30 +414,177 @@ export default function PdfViewer() {
     markAudioStartPage(currentViewingPageRef.current || 1);
   }, [markAudioStartPage]);
 
+  const fillPageField = useCallback(
+    (page: number, total?: number, fromTap?: boolean, fromViewer?: boolean) => {
+      const trustedTotal = fromViewer && total && total > 0 ? total : 0;
+      const n = Math.max(1, Math.round(Number(page)) || 1);
+      const capLimit = trustedTotal > 0 ? trustedTotal : totalPagesRef.current;
+      const capped = capLimit > 0 ? Math.min(n, capLimit) : n;
+      if (fromTap) {
+        lastTapFillAtRef.current = Date.now();
+        tapHoldUntilRef.current = Date.now() + 2500;
+        scrollYAtTapRef.current = scrollMetricsRef.current.y;
+        pageInputFocusedRef.current = false;
+      } else if (pageInputFocusedRef.current) {
+        return;
+      } else if (
+        !fromViewer &&
+        Date.now() < tapHoldUntilRef.current &&
+        Math.abs(scrollMetricsRef.current.y - scrollYAtTapRef.current) < 28
+      ) {
+        return;
+      }
+      setCurrentViewingPage(capped);
+      setPageInput(String(capped));
+      if (trustedTotal > 0) setTotalPages(trustedTotal);
+    },
+    []
+  );
+
+  const reinjectPageTapScript = useCallback(() => {
+    const run = () => webViewRef.current?.injectJavaScript(PDF_PAGE_TAP_SCRIPT);
+    run();
+    setTimeout(run, 700);
+    setTimeout(run, 2000);
+  }, []);
+
+  const onNativePageTap = useCallback(
+    (event?: { nativeEvent?: { x?: number; y?: number } }) => {
+      const y = Number(event?.nativeEvent?.y);
+      const x = Number(event?.nativeEvent?.x);
+      if (!webPageReportsRef.current && Number.isFinite(y)) {
+        const guessed = pageFromScrollPosition(
+          scrollMetricsRef.current.y,
+          y,
+          scrollMetricsRef.current.height,
+          scrollMetricsRef.current.viewH,
+          scrollMetricsRef.current.viewW,
+          totalPagesRef.current
+        );
+        if (guessed) fillPageField(guessed, undefined, true, false);
+      }
+      const safeY = Number.isFinite(y) ? y : 0;
+      const safeX = Number.isFinite(x) ? x : 0;
+      webViewRef.current?.injectJavaScript(
+        `try{window.__jevahReportPdfPage&&window.__jevahReportPdfPage(${safeY},${safeX});}catch(e){}true;`
+      );
+    },
+    [fillPageField]
+  );
+
+  const onPdfScroll = useCallback(
+    (event: any) => {
+      const ne = event?.nativeEvent || {};
+      scrollMetricsRef.current = {
+        y: Number(ne.contentOffset?.y) || 0,
+        height: Number(ne.contentSize?.height) || 0,
+        viewH: Number(ne.layoutMeasurement?.height) || 0,
+        viewW: Number(ne.layoutMeasurement?.width) || Number(ne.contentSize?.width) || 0,
+      };
+      if (webPageReportsRef.current) return;
+      const guessed = pageFromScrollPosition(
+        scrollMetricsRef.current.y,
+        scrollMetricsRef.current.viewH / 2,
+        scrollMetricsRef.current.height,
+        scrollMetricsRef.current.viewH,
+        scrollMetricsRef.current.viewW,
+        totalPagesRef.current
+      );
+      if (guessed) fillPageField(guessed, undefined, false, false);
+    },
+    [fillPageField]
+  );
+
   const handlePdfWebViewMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
       try {
         const data = JSON.parse(event.nativeEvent.data || "{}");
-        if (data.type === "audioStartPage") {
-          markAudioStartPage(data.page || currentViewingPageRef.current || 1);
-          if (data.totalPages > 0) setTotalPages(data.totalPages);
+        if (data.source !== "jevah-tap") return;
+        if (data.type === "pageClick") {
+          webPageReportsRef.current = true;
+          fillPageField(data.page || 1, data.totalPages, true, true);
           return;
         }
-        if (
-          data.type === "pageChange" ||
-          data.type === "pageUpdate" ||
-          data.type === "pageClick"
-        ) {
-          const pageNumber = data.page || 1;
-          setCurrentViewingPage(pageNumber);
-          if (data.totalPages > 0) setTotalPages(data.totalPages);
+        if (data.type === "pageChange" || data.type === "pageUpdate") {
+          webPageReportsRef.current = true;
+          fillPageField(data.page || 1, data.totalPages, false, true);
+          return;
+        }
+        if (data.type === "tapPoint") {
+          const guessed = pageFromScrollPosition(
+            scrollMetricsRef.current.y,
+            Number(data.y) || 0,
+            scrollMetricsRef.current.height,
+            scrollMetricsRef.current.viewH,
+            scrollMetricsRef.current.viewW,
+            totalPagesRef.current
+          );
+          if (guessed) fillPageField(guessed, undefined, true, false);
+          return;
+        }
+        if (data.type === "pdfMetrics") {
+          if (webPageReportsRef.current) return;
+          const height = Number(data.height) || 0;
+          const view = Number(data.view) || 0;
+          if (!(height > view * 1.15)) return;
+          scrollMetricsRef.current = {
+            y: Number(data.top) || 0,
+            height,
+            viewH: view,
+            viewW: Number(data.width) || scrollMetricsRef.current.viewW,
+          };
+          const guessed = pageFromScrollPosition(
+            scrollMetricsRef.current.y,
+            view / 2,
+            height,
+            view,
+            scrollMetricsRef.current.viewW,
+            totalPagesRef.current
+          );
+          if (guessed) fillPageField(guessed, undefined, false, false);
         }
       } catch {
         // ignore malformed WebView messages
       }
     },
-    [markAudioStartPage]
+    [fillPageField]
   );
+
+  useEffect(() => {
+    if (!localUri) return;
+    let cancelled = false;
+    const readCount = async () => {
+      try {
+        const info = await FileSystem.getInfoAsync(localUri);
+        const size = info.exists && "size" in info ? Number(info.size) || 0 : 0;
+        if (!(size > 0)) return;
+        const chunk = 256 * 1024;
+        const readChunk = async (position: number, length: number) => {
+          const b64 = await FileSystem.readAsStringAsync(localUri, {
+            encoding: FileSystem.EncodingType.Base64,
+            position,
+            length,
+          });
+          if (typeof atob !== "function") return "";
+          return atob(b64);
+        };
+        const head = await readChunk(0, Math.min(chunk, size));
+        const tail =
+          size > chunk ? await readChunk(Math.max(0, size - chunk), Math.min(chunk, size)) : "";
+        if (cancelled) return;
+        const count = pdfPageCountFromSnippet(`${head}\n${tail}`);
+        if (count && count > 1) {
+          setTotalPages((current) => (current > 1 ? current : count));
+        }
+      } catch {
+        // page count is only a hint for tap math
+      }
+    };
+    readCount();
+    return () => {
+      cancelled = true;
+    };
+  }, [localUri]);
 
   const onHeadsetPress = useCallback(() => {
     if (listenMode) {
@@ -260,6 +610,19 @@ export default function PdfViewer() {
     }
     return () => setMiniPlayerSuppression("ebook-listen", false);
   }, [listenMode]);
+
+  useEffect(() => {
+    if (listenMode) return;
+    dismissReadingNarration();
+  }, [listenMode]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        dismissReadingNarration();
+      };
+    }, [])
+  );
 
   useEffect(() => {
     if (extractedTotalPages > 0 && extractedTotalPages > totalPages) {
@@ -567,8 +930,8 @@ export default function PdfViewer() {
                 {audioStartPage
                   ? `Audio will start from page ${audioStartPage}. Tap the headset to play.`
                   : showDoubleTapHint
-                  ? "Type a page number (or double-tap the PDF), then tap the headset."
-                  : "Type a page number or double-tap the PDF, then tap the headset."}
+                  ? "The page number follows where you scroll. Tap the headset to play."
+                  : "Tap or scroll to a page — the number fills in — then tap the headset."}
               </Text>
               <View
                 style={{
@@ -593,12 +956,17 @@ export default function PdfViewer() {
                     setPageInput(digits);
                     setShowDoubleTapHint(false);
                   }}
+                  onFocus={() => {
+                    pageInputFocusedRef.current = true;
+                  }}
                   onSubmitEditing={() => {
                     const n = parseTypedPage();
                     if (n != null) markAudioStartPage(n);
                     Keyboard.dismiss();
                   }}
                   onBlur={() => {
+                    pageInputFocusedRef.current = false;
+                    if (Date.now() - lastTapFillAtRef.current < 700) return;
                     const n = parseTypedPage();
                     if (n != null) markAudioStartPage(n);
                   }}
@@ -652,10 +1020,23 @@ export default function PdfViewer() {
               </View>
             </View>
         <TapGestureHandler
+          ref={doubleTapRef}
           numberOfTaps={2}
           maxDelayMs={400}
+          maxDeltaX={24}
+          maxDeltaY={24}
+          simultaneousHandlers={nativeScrollRef}
           onActivated={onNativeDoubleTap}
         >
+        <TapGestureHandler
+          numberOfTaps={1}
+          simultaneousHandlers={[doubleTapRef, nativeScrollRef]}
+          maxDeltaX={28}
+          maxDeltaY={28}
+          maxDurationMs={350}
+          onActivated={onNativePageTap}
+        >
+          <NativeViewGestureHandler ref={nativeScrollRef}>
           <View style={{ flex: 1 }} collapsable={false}>
       {Platform.OS === "android" && url ? (
         // Android: Always use Google Docs viewer directly
@@ -677,6 +1058,11 @@ export default function PdfViewer() {
             androidLayerType="hardware"
             cacheEnabled={true}
             cacheMode="LOAD_DEFAULT"
+            ref={webViewRef}
+            injectedJavaScriptBeforeContentLoaded={PDF_PAGE_TAP_SCRIPT}
+            injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
+            injectedJavaScriptForMainFrameOnly={false}
+            onScroll={onPdfScroll}
             onMessage={handlePdfWebViewMessage}
             onLoadStart={() => {
               console.log("🌐 Android: Google Docs viewer started loading");
@@ -687,6 +1073,7 @@ export default function PdfViewer() {
               setLoading(false);
               setErrorText(null);
               markEbookFirstPage();
+              reinjectPageTapScript();
             }}
             onError={(error) => {
               console.error("❌ Android WebView error:", error);
@@ -820,6 +1207,7 @@ export default function PdfViewer() {
           {/* PDF Viewer - iOS or fallback */}
           {Platform.OS === "ios" && localUri ? (
             <WebView
+              ref={webViewRef}
               style={{ flex: 1, backgroundColor: "#fff" }}
               source={{ uri: localUri }}
               originWhitelist={["*"]}
@@ -830,6 +1218,10 @@ export default function PdfViewer() {
               scalesPageToFit
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
+              injectedJavaScriptBeforeContentLoaded={PDF_PAGE_TAP_SCRIPT}
+              injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
+              injectedJavaScriptForMainFrameOnly={false}
+              onScroll={onPdfScroll}
               onMessage={handlePdfWebViewMessage}
               injectedJavaScript={`
             (function() {
@@ -1007,8 +1399,11 @@ export default function PdfViewer() {
                   
                   function handlePageClick(e) {
                     const now = Date.now();
-                    const isScroll = Math.abs(e.clientY - touchStartY) > 10;
-                    if (isScroll) {
+                    const pointY = e.changedTouches && e.changedTouches[0]
+                      ? e.changedTouches[0].clientY
+                      : e.clientY;
+                    const moved = touchStartY && pointY != null && Math.abs(pointY - touchStartY) > 18;
+                    if (moved) {
                       console.log('🚫 Ignoring scroll gesture, not a tap');
                       return;
                     }
@@ -1089,6 +1484,7 @@ export default function PdfViewer() {
                 console.log("✅ PDF WebView loaded successfully");
                 setLoading(false);
                 markEbookFirstPage();
+                reinjectPageTapScript();
               }}
               onError={(error) => {
                 console.error("❌ PDF WebView error on iOS:", error);
@@ -1107,8 +1503,13 @@ export default function PdfViewer() {
             />
           ) : fallbackUri ? (
             <WebView
+              ref={webViewRef}
               style={{ flex: 1, backgroundColor: "#fff" }}
               source={{ uri: fallbackUri }}
+              injectedJavaScriptBeforeContentLoaded={PDF_PAGE_TAP_SCRIPT}
+              injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
+              injectedJavaScriptForMainFrameOnly={false}
+              onScroll={onPdfScroll}
               originWhitelist={["*"]}
               javaScriptEnabled={true}
               domStorageEnabled={true}
@@ -1229,8 +1630,11 @@ export default function PdfViewer() {
                   
                   function handlePageClick(e) {
                     const now = Date.now();
-                    const isScroll = Math.abs(e.clientY - touchStartY) > 10;
-                    if (isScroll) {
+                    const pointY = e.changedTouches && e.changedTouches[0]
+                      ? e.changedTouches[0].clientY
+                      : e.clientY;
+                    const moved = touchStartY && pointY != null && Math.abs(pointY - touchStartY) > 18;
+                    if (moved) {
                       console.log('🚫 Ignoring scroll gesture (fallback), not a tap');
                       return;
                     }
@@ -1305,6 +1709,7 @@ export default function PdfViewer() {
                 setLoading(false);
                 setErrorText(null);
                 markEbookFirstPage();
+                reinjectPageTapScript();
               }}
               onError={(error) => {
                 console.error("❌ Fallback WebView error:", error);
@@ -1363,6 +1768,8 @@ export default function PdfViewer() {
         </View>
       )}
           </View>
+          </NativeViewGestureHandler>
+        </TapGestureHandler>
         </TapGestureHandler>
         </View>
       )}

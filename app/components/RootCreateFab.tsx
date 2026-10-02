@@ -7,9 +7,9 @@
  * uses RNGH Tap so it wins the hit test.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { InteractionManager, View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
@@ -20,6 +20,11 @@ import {
   isBottomChromeMounted,
   subscribeBottomChrome,
 } from "../../src/shared/layout/bottomChromeGate";
+import {
+  isEbookFeedActive,
+  isEbookReaderPath,
+  subscribeEbookFeed,
+} from "../../src/shared/layout/createFabGate";
 import {
   getCreateSheetBottomOffset,
   getFabWrapperBottom,
@@ -44,6 +49,12 @@ export default function RootCreateFab() {
     isBottomChromeMounted,
     isBottomChromeMounted
   );
+  const ebookFeed = useSyncExternalStore(
+    subscribeEbookFeed,
+    isEbookFeedActive,
+    isEbookFeedActive
+  );
+  const pathname = usePathname();
   const { isVisible: commentsOpen } = useCommentModal();
   const overlayFull = useCopyrightFreeOverlayStore((s) => s.surface === "full");
   const { width } = useWindowDimensions();
@@ -51,7 +62,12 @@ export default function RootCreateFab() {
   const [showActions, setShowActions] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
 
-  const hidden = !chromeMounted || commentsOpen || overlayFull;
+  const hidden =
+    !chromeMounted ||
+    commentsOpen ||
+    overlayFull ||
+    ebookFeed ||
+    isEbookReaderPath(pathname);
 
   const toggle = useCallback(() => {
     setSheetMounted(true);
@@ -88,7 +104,7 @@ export default function RootCreateFab() {
     setShowActions(false);
     router.push("/categories/upload");
     queueMicrotask(() => prefetchUploadScreen());
-    InteractionManager.runAfterInteractions(() => {
+    requestIdleCallback(() => {
       try {
         useMediaStore.getState().stopAudioFn?.();
       } catch {
@@ -106,7 +122,7 @@ export default function RootCreateFab() {
     setShowActions(false);
     router.push("/goLlive/AllowPermissionsScreen");
     queueMicrotask(() => prefetchGoLiveScreen());
-    InteractionManager.runAfterInteractions(() => {
+    requestIdleCallback(() => {
       try {
         useMediaStore.getState().stopAudioFn?.();
       } catch {

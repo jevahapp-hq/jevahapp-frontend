@@ -26,6 +26,8 @@ import {
   validateUploadFileSize,
 } from "./uploadFlow/uploadPayload";
 import { extractUploadedMedia } from "./uploadFlow/extractUploadedMedia";
+import type { UploadedMediaPayload } from "./uploadFlow/extractUploadedMedia";
+import { reconcileUploadOutcome } from "./uploadFlow/reconcileUploadOutcome";
 import {
   persistUploadedMedia,
   scheduleUploadSuccessNavigation,
@@ -62,8 +64,25 @@ export function useUploadFlow(deps: UploadFlowDeps) {
   const { startSimulated, stopSimulated } = useSimulatedUploadProgress(
     setUploadState
   );
+  const abortRef = useRef<AbortController | null>(null);
+  const failureSurfacedRef = useRef(false);
+  const surfaceFailureRef = useRef<(message: string) => void>(() => {});
+
   const { connectSocket, cleanupSocket, isUsingRealTimeProgressRef } =
-    useUploadSocketProgress(setUploadState, stopSimulated);
+    useUploadSocketProgress(setUploadState, stopSimulated, (message) => {
+      surfaceFailureRef.current(message);
+    });
+
+  surfaceFailureRef.current = (message: string) => {
+    if (failureSurfacedRef.current) return;
+    failureSurfacedRef.current = true;
+    abortRef.current?.abort();
+    stopSimulated();
+    cleanupSocket();
+    setLoading(false);
+    setUploadState({ status: "idle", progress: 0, message: "" });
+    setUploadResult(buildErrorResult(message || "Please try again."));
+  };
 
   useEffect(() => {
     void checkAuthenticationStatus();
@@ -81,7 +100,80 @@ export function useUploadFlow(deps: UploadFlowDeps) {
   }, [cleanupSocket, stopSimulated]);
 
   const proceedWithUpload = async () => {
+    let uploadId = "";
+    const completeAsPosted = async (uploaded: UploadedMediaPayload | null) => {
+      if (!uploaded?._id) {
+        setLoading(false);
+        cleanupSocket();
+        setUploadState({
+          status: "success",
+          progress: 100,
+          message: "Successfully posted",
+        });
+        setUploadResult({
+          kind: "success",
+          title: "Successfully posted",
+          message: "Your post is currently under review.",
+          primaryLabel: "View All",
+          secondaryLabel: "Stay here",
+        });
+        void queryClient.invalidateQueries({ queryKey: ["all-content"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["all-content-infinite"],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["default-content"] });
+        const navigateToFeed = () => {
+          if (successNavigateTimeoutRef.current) {
+            clearTimeout(successNavigateTimeoutRef.current);
+            successNavigateTimeoutRef.current = null;
+          }
+          setUploadResult(null);
+          resetForm();
+          router.push({
+            pathname: "/categories/HomeScreen",
+            params: { default: "Home", defaultCategory: "ALL" },
+          });
+        };
+        successNavigateRef.current = navigateToFeed;
+        if (successNavigateTimeoutRef.current) {
+          clearTimeout(successNavigateTimeoutRef.current);
+        }
+        successNavigateTimeoutRef.current = setTimeout(navigateToFeed, 2800);
+        return;
+      }
+
+      setUploadState({
+        status: "success",
+        progress: 100,
+        message: "Successfully posted",
+      });
+      cleanupSocket();
+      const feedItem = await persistUploadedMedia({
+        uploaded,
+        file: file!,
+        isSermonContent,
+        selectedType,
+      });
+      scheduleUploadSuccessNavigation({
+        router,
+        queryClient,
+        selectedType,
+        feedItem,
+        file: file!,
+        isSermonContent,
+        resetForm,
+        setLoading,
+        setUploadState,
+        setUploadResult,
+        successNavigateTimeoutRef,
+        onReadyNavigate: (navigateToFeed) => {
+          successNavigateRef.current = navigateToFeed;
+        },
+      });
+    };
+
     try {
+      failureSurfacedRef.current = false;
       setLoading(true);
       setModerationError(null);
       setUploadResult(null);
@@ -128,10 +220,11 @@ export function useUploadFlow(deps: UploadFlowDeps) {
       });
 
       const controller = new AbortController();
+      abortRef.current = controller;
       const timeoutDuration = getUploadTimeoutMs(file.mimeType);
       const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
-      const uploadId = createUploadId();
+      uploadId = createUploadId();
       await connectSocket(uploadId);
 
       setUploadState({
@@ -151,6 +244,11 @@ export function useUploadFlow(deps: UploadFlowDeps) {
       clearTimeout(timeoutId);
       stopSimulated();
 
+      if (failureSurfacedRef.current) {
+        setLoading(false);
+        return;
+      }
+
       if (!isUsingRealTimeProgressRef.current) {
         setUploadState((prev) => ({
           ...prev,
@@ -159,25 +257,24 @@ export function useUploadFlow(deps: UploadFlowDeps) {
         }));
       }
 
-      const contentType = res.headers.get("content-type") || "";
-      let result: unknown = null;
       let rawText: string | null = null;
+      let result: unknown = null;
       try {
-        if (contentType.includes("application/json")) {
-          result = await res.json();
-        } else {
-          rawText = await res.text();
+        rawText = await res.text();
+        const trimmed = rawText.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+          result = JSON.parse(trimmed);
         }
       } catch {
-        try {
-          rawText = await res.text();
-        } catch {
-          // no-op
-        }
+        result = null;
       }
 
       if (!res.ok) {
-        setLoading(false);
+        if (failureSurfacedRef.current) {
+          setLoading(false);
+          return;
+        }
+        failureSurfacedRef.current = true;
         cleanupSocket();
         await handleUploadHttpError({
           res,
@@ -187,77 +284,81 @@ export function useUploadFlow(deps: UploadFlowDeps) {
           setModerationError,
           setUploadResult,
           setUploadState,
-          onLateSuccess: () => {
-            // The proxy timed out but the write committed. Treat it as the
-            // success it was: refresh the feed and tell the user it's up.
-            setUploadState({
-              status: "success",
-              progress: 100,
-              message: "Upload complete",
-            });
-            setUploadResult({
-              kind: "success",
-              title: "You're live",
-              message:
-                "The server was slow to confirm, but your content went through and is on the feed.",
-              primaryLabel: "View feed",
-              secondaryLabel: "Stay here",
-            });
-            void queryClient.invalidateQueries({ queryKey: ["all-content"] });
-            void queryClient.invalidateQueries({
-              queryKey: ["all-content-infinite"],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ["default-content"],
-            });
-            resetForm();
+          onLateSuccess: async (mediaId) => {
+            await completeAsPosted(
+              mediaId
+                ? {
+                    _id: mediaId,
+                    title: title || "Untitled",
+                    description,
+                    fileUrl: "",
+                    contentType: selectedType || "videos",
+                    moderationStatus: "under_review",
+                  }
+                : null
+            );
           },
         });
+        setLoading(false);
         return;
       }
 
-      // Prefer `data` (current BE); fall back to legacy `media`
       const uploaded = extractUploadedMedia(result);
-      if (!uploaded) {
+      if (uploaded) {
+        await completeAsPosted(uploaded);
+        return;
+      }
+
+      const outcome = uploadId
+        ? await reconcileUploadOutcome(uploadId)
+        : { status: "unknown" as const };
+      if (outcome.status === "failed") {
         setLoading(false);
         cleanupSocket();
         handleUploadParseFailure(setUploadResult);
         return;
       }
-
-      // Socket may already have sent `complete` — snap bar to 100
-      setUploadState((prev) => ({
-        status: "success",
-        progress: Math.max(prev.progress || 0, 100),
-        message: prev.message || "Upload complete",
-      }));
-      cleanupSocket();
-
-      const feedItem = await persistUploadedMedia({
-        uploaded,
-        file,
-        isSermonContent,
-        selectedType,
-      });
-
-      scheduleUploadSuccessNavigation({
-        router,
-        queryClient,
-        selectedType,
-        feedItem,
-        file,
-        isSermonContent,
-        resetForm,
-        setLoading,
-        setUploadState,
-        setUploadResult,
-        successNavigateTimeoutRef,
-        onReadyNavigate: (navigateToFeed) => {
-          successNavigateRef.current = navigateToFeed;
-        },
-      });
+      await completeAsPosted(
+        outcome.status === "completed" && outcome.mediaId
+          ? {
+              _id: outcome.mediaId,
+              title: title || "Untitled",
+              description,
+              fileUrl: "",
+              contentType: selectedType || "videos",
+              moderationStatus: "under_review",
+            }
+          : null
+      );
     } catch (error) {
+      if (failureSurfacedRef.current) {
+        setLoading(false);
+        return;
+      }
       stopSimulated();
+      const ambiguous =
+        (error as { name?: string; message?: string })?.name === "AbortError" ||
+        /timeout|network request failed|failed to fetch|network/i.test(
+          (error as { message?: string })?.message || ""
+        );
+      if (uploadId && ambiguous) {
+        const outcome = await reconcileUploadOutcome(uploadId);
+        if (outcome.status !== "failed") {
+          await completeAsPosted(
+            outcome.status === "completed" && outcome.mediaId
+              ? {
+                  _id: outcome.mediaId,
+                  title: title || "Untitled",
+                  description,
+                  fileUrl: "",
+                  contentType: selectedType || "videos",
+                  moderationStatus: "under_review",
+                }
+              : null
+          );
+          return;
+        }
+      }
       cleanupSocket();
       setLoading(false);
       setUploadState({ status: "error", progress: 0, message: "" });

@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    SafeAreaView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNotification } from "../../context/NotificationContext";
 import {
     bibleApiService,
@@ -30,6 +30,9 @@ import BibleReader from "./BibleReader";
 import BibleSearch from "./BibleSearch";
 import BibleTranslationPicker from "./BibleTranslationPicker";
 import BibleVerseSelector from "./BibleVerseSelector";
+import BibleFontSheet from "./BibleFontSheet";
+import BibleVoiceSheet, { type BibleVoiceChoice } from "./BibleVoiceSheet";
+import { useBibleReadingStyle } from "../../utils/bibleReadingStyle";
 
 // "books" shows the book list with chapters expanding inline (accordion) -
 // there is no separate chapter screen. Tapping a chapter goes to "verses"
@@ -58,6 +61,15 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     getSelectedTranslationId
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceMenu, setVoiceMenu] = useState<{
+    voices: BibleVoiceChoice[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+  } | null>(null);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const reading = useBibleReadingStyle();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [installedIds, setInstalledIds] = useState<string[]>(() =>
     getInstalledPacks().map((p) => p.translationId)
@@ -65,6 +77,18 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const [packRevision, setPackRevision] = useState(0);
   const { showNotification } = useNotification();
   const floatingNavRef = useRef<BibleFloatingNavRef>(null);
+  const handleVoiceMenu = useCallback(
+    (
+      menu: {
+        voices: BibleVoiceChoice[];
+        selectedId: string;
+        onSelect: (id: string) => void;
+      } | null
+    ) => {
+      setVoiceMenu(menu);
+    },
+    []
+  );
   const translationKey = `${translationId}:${packRevision}`;
 
   const persistPlace = (
@@ -326,6 +350,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
 
   const goBack = () => {
     if (viewMode === "reader") {
+      setChromeVisible(true);
       setViewMode("verses");
     } else if (viewMode === "verses") {
       setViewMode("books");
@@ -334,6 +359,22 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     } else if (onBack) {
       onBack();
     }
+  };
+
+  const chromeToggleAt = useRef(0);
+  const toggleReadingChrome = () => {
+    const now = Date.now();
+    if (now - chromeToggleAt.current < 380) return;
+    chromeToggleAt.current = now;
+    setChromeVisible((visible) => {
+      const next = !visible;
+      floatingNavRef.current?.setHidden(!next);
+      if (!next) {
+        setFontOpen(false);
+        setVoiceOpen(false);
+      }
+      return next;
+    });
   };
 
   const renderHeader = () => (
@@ -359,6 +400,32 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
       </View>
 
       <View style={styles.headerActions}>
+        {viewMode === "reader" && voiceMenu ? (
+          <TouchableOpacity
+            style={styles.textStyleButton}
+            onPress={() => {
+              setFontOpen(false);
+              setVoiceOpen(true);
+            }}
+            accessibilityLabel="Choose narrator"
+          >
+            <Ionicons name="mic-outline" size={18} color="#1F2937" />
+          </TouchableOpacity>
+        ) : null}
+        {viewMode === "reader" ? (
+          <TouchableOpacity
+            style={styles.textStyleButton}
+            onPress={() => {
+              setVoiceOpen(false);
+              setFontOpen(true);
+            }}
+            accessibilityLabel="Text style"
+          >
+            <Text style={[styles.textStyleLabel, { fontFamily: reading.fontFamily }]}>
+              Aa
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         {catalog?.translations?.length ? (
           <TouchableOpacity
             style={styles.translationChip}
@@ -415,14 +482,23 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
               chapterNumber={selectedChapter.chapterNumber}
               initialVerses={preloadedVerses}
               initialVerseNumber={selectedVerseNumber}
+              translationId={translationId}
               onNavigateChapter={handleNavigateChapter}
               canNavigatePrev={canNavigatePrev}
               canNavigateNext={canNavigateNext}
-              onScreenTap={() => {
-                // Toggle bottom nav bar when screen is double tapped
-                floatingNavRef.current?.toggleHide();
+              chromeVisible={chromeVisible}
+              onVoiceMenu={handleVoiceMenu}
+              onScreenTap={toggleReadingChrome}
+              onChromeChange={(hidden) => {
+                setChromeVisible(!hidden);
+                floatingNavRef.current?.setHidden(hidden);
+                if (hidden) {
+                  setFontOpen(false);
+                  setVoiceOpen(false);
+                }
               }}
             />
+            {chromeVisible ? (
             <BibleFloatingNav
               ref={floatingNavRef}
               book={selectedBook}
@@ -434,6 +510,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
               canNavigatePrev={canNavigatePrev}
               canNavigateNext={canNavigateNext}
             />
+            ) : null}
           </>
         ) : null;
 
@@ -468,6 +545,14 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
           onClose={() => setPickerOpen(false)}
         />
       ) : null}
+      <BibleFontSheet visible={fontOpen} onClose={() => setFontOpen(false)} />
+      <BibleVoiceSheet
+        visible={voiceOpen && !!voiceMenu}
+        voices={voiceMenu?.voices ?? []}
+        selectedId={voiceMenu?.selectedId ?? ""}
+        onSelect={(id) => voiceMenu?.onSelect(id)}
+        onClose={() => setVoiceOpen(false)}
+      />
     </View>
   );
 }
@@ -522,6 +607,19 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  textStyleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+    backgroundColor: "#F3F4F6",
+  },
+  textStyleLabel: {
+    fontSize: 16,
+    color: "#1F2937",
   },
   translationChip: {
     flexDirection: "row",

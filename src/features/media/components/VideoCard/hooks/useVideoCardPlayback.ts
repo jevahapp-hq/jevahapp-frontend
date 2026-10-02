@@ -31,6 +31,15 @@ const MIN_DURATION_MS = 100;
 const DURATION_EPSILON_MS = 40;
 const POSITION_EPSILON_MS = 80;
 
+function alreadyAtResume(player: VideoPlayer, positionMs: number): boolean {
+  try {
+    const nowMs = Math.max(0, Number(player.currentTime) || 0) * 1000;
+    return Math.abs(nowMs - positionMs) < 350;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Progress / duration / view-tracking driven by expo-video player events
  * (`timeUpdate`, `statusChange`, `playToEnd`, `sourceLoad`).
@@ -99,6 +108,7 @@ export function useVideoCardPlayback({
           .getState()
           .consumeResumePlayback(contentId, "feed");
         if (!resume || !(resume.positionMs > 400)) return;
+        if (alreadyAtResume(player, resume.positionMs)) return;
         onResumeSeekRef.current?.();
         void seekPlayerToMs(player, resume.positionMs).then((ok) => {
           if (!ok || !isMountedRef.current) return;
@@ -251,6 +261,7 @@ export function useVideoCardPlayback({
             .getState()
             .consumeResumePlayback(contentId, "feed");
           if (resume && resume.positionMs > 400) {
+            if (alreadyAtResume(player, resume.positionMs)) return;
             onResumeSeekRef.current?.();
             void seekPlayerToMs(player, resume.positionMs).then((ok) => {
               if (!ok || !isMountedRef.current) return;
@@ -354,7 +365,7 @@ export function useVideoCardPlayback({
         const resume = useReelsStore
           .getState()
           .consumeResumePlayback(contentId, "feed");
-        if (resume && resume.positionMs > 400) {
+        if (resume && resume.positionMs > 400 && !alreadyAtResume(player, resume.positionMs)) {
           onResumeSeekRef.current?.();
           void seekPlayerToMs(player, resume.positionMs).then((ok) => {
             if (!ok || !isMountedRef.current) return;

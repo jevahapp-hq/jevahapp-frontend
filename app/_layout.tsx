@@ -11,16 +11,17 @@ import {
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { BackHandler, InteractionManager, Platform, Text, View } from "react-native";
+import { BackHandler, LogBox, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
   initialWindowMetrics as safeAreaInitialMetrics,
 } from "react-native-safe-area-context";
+import { AppLaunchGate } from "./components/AppLaunchScreen";
 import { CommentMediaShift } from "./components/CommentMediaShift";
 import DeferredRootOverlays from "./components/DeferredRootOverlays";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -32,6 +33,7 @@ import { useDownloadStore } from "@/store/useDownloadStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { appMmkv } from "../src/shared/cache/mmkvStorage";
+import "./utils/headerProfileCache";
 import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
 import {
   startBootCacheHydration,
@@ -100,6 +102,11 @@ function resolveClerkPublishableKey(): string | null {
 }
 
 const publishableKey = resolveClerkPublishableKey();
+
+// Development publishable keys always log this. It is expected in local builds.
+if (__DEV__) {
+  LogBox.ignoreLogs(["Clerk has been loaded with development keys"]);
+}
 
 const tokenCache = {
   async getToken(key: string) {
@@ -296,7 +303,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isInitialized) return;
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = setTimeout(() => {
       void (async () => {
         try {
           if (!cancelled) await loadSavedItems();
@@ -319,7 +326,7 @@ export default function RootLayout() {
     });
     return () => {
       cancelled = true;
-      task.cancel();
+      clearTimeout(task);
     };
   }, [isInitialized, loadDownloadedItems, loadSavedItems]);
 
@@ -377,17 +384,26 @@ export default function RootLayout() {
           <ClerkProvider
             publishableKey={publishableKey}
             tokenCache={tokenCache}
-            afterSignInUrl="/"
-            afterSignUpUrl="/"
+            signInFallbackRedirectUrl="/"
+            signUpFallbackRedirectUrl="/"
           >
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
                 <NotificationProvider>
                   <CommentModalProvider>
                     <LikeQueueBootstrap />
                     <CommentMediaShift>
-                      <Slot />
+                      <Stack
+                        screenOptions={{
+                          headerShown: false,
+                          gestureEnabled: true,
+                          fullScreenGestureEnabled: true,
+                          animation: "slide_from_right",
+                          contentStyle: { backgroundColor: "#FCFCFD" },
+                        }}
+                      />
                     </CommentMediaShift>
                     <DeferredRootOverlays />
+                    <AppLaunchGate />
                   </CommentModalProvider>
                 </NotificationProvider>
             </GestureHandlerRootView>

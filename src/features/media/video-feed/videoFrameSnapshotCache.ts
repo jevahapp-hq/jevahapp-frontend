@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { fixOverEncodedMediaUrl } from "../../../shared/utils/videoUrlManager";
 import { FEED_VIDEO_START_POSITION_SECONDS } from "./feedVideoConfig";
 import { isLiveVideoPlayer, readPlayerCurrentTimeSec } from "./safeVideoPlayer";
+import { runThumbnailCapture } from "./thumbnailCaptureGate";
 
 function snapshotKey(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -148,7 +149,7 @@ function startCapture(url: string, player: VideoPlayer, timeSec?: number) {
   }
 
   inFlight.add(url);
-  (async () => {
+  void runThumbnailCapture(async () => {
     try {
       if (!isLiveVideoPlayer(player)) return;
       // MUST be an array: passing a single number natively crashes iOS on
@@ -164,7 +165,7 @@ function startCapture(url: string, player: VideoPlayer, timeSec?: number) {
       inFlight.delete(url);
       flushPendingCaptures();
     }
-  })();
+  });
 }
 
 /**

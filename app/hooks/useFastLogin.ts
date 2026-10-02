@@ -1,6 +1,7 @@
-import { useAuth, useOAuth, useUser } from "@clerk/clerk-expo";
+import { useAuth, useClerk, useOAuth, useUser } from "@clerk/clerk-expo";
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { waitForClerkIdentity } from "../utils/accountIdentity";
 import { authUtils } from "../utils/authUtils";
 
 export const useFastLogin = () => {
@@ -8,7 +9,10 @@ export const useFastLogin = () => {
   const [error, setError] = useState<string | null>(null);
 
   const { isSignedIn, isLoaded: authLoaded, signOut, getToken } = useAuth();
+  const clerk = useClerk();
   const { isLoaded: userLoaded, user } = useUser();
+  const userRef = useRef(user);
+  userRef.current = user;
   const { startOAuthFlow: startGoogleAuth } = useOAuth({
     strategy: "oauth_google",
   });
@@ -103,17 +107,32 @@ export const useFastLogin = () => {
 
         await setActive({ session: createdSessionId });
 
-        // Wait for user data
-        const currentUser = await authUtils.waitForUserData(user);
+        // Read the Clerk user after the session is active. The `user` value
+        // captured before OAuth is stale and used to be filled with
+        // "Unknown" / "User", which the backend stored as an anonymous account.
+        const identity = await waitForClerkIdentity(
+          () => userRef.current || clerk.user
+        );
+        if (!identity) {
+          try {
+            await signOut();
+          } catch {
+            // No backend user was created. Clearing Clerk avoids a half-session.
+          }
+          throw new Error(
+            "Google or Apple did not share a first name, last name, and email. No account was created. Sign up with email, or use an account that shares your name and email."
+          );
+        }
+
         const token = await getToken();
         if (!token) throw new Error("Failed to retrieve Clerk token");
 
-        // Prepare user info
+        const liveUser = userRef.current || clerk.user;
         const userInfo = {
-          firstName: currentUser.firstName || "Unknown",
-          lastName: currentUser.lastName || "User",
-          avatar: currentUser.imageUrl || "",
-          email: currentUser.primaryEmailAddress?.emailAddress || "",
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          avatar: liveUser?.imageUrl || "",
+          email: identity.email,
         };
 
         // Send auth request to backend
@@ -154,7 +173,7 @@ export const useFastLogin = () => {
       isSignedIn,
       signOut,
       getToken,
-      user,
+      clerk,
       startGoogleAuth,
       startAppleAuth,
     ]

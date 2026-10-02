@@ -1,14 +1,15 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect, router } from "expo-router";
-import React, { Suspense, useCallback, useEffect, useState } from "react";
-import { View } from "react-native";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import AppLaunchScreen from "./components/AppLaunchScreen";
 import { appMmkv } from "../src/shared/cache/mmkvStorage";
 import {
   hasBackendSession,
   hasBackendSessionSync,
 } from "./utils/sessionAuth";
 import { hideAppSplash } from "../src/shared/utils/appSplash";
+import { restoreBackendSessionFromClerk } from "./utils/restoreClerkSession";
 import "../global.css";
 
 const WelcomeLanding = React.lazy(() => import("./components/WelcomeLanding"));
@@ -33,14 +34,7 @@ function markOnboardingSeenSync(): void {
 }
 
 function BootSpinner() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#FFFFFF",
-      }}
-    />
-  );
+  return <AppLaunchScreen />;
 }
 
 /**
@@ -64,8 +58,16 @@ function WelcomeAsyncGate() {
     hasOnboardingSeenSync()
   );
   const [redirected, setRedirected] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
-  const { isLoaded: authLoaded } = useAuth();
+  const { isLoaded: authLoaded, isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
+  const userRef = useRef(user);
+  userRef.current = user;
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const isSignedInRef = useRef(isSignedIn);
+  isSignedInRef.current = isSignedIn;
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +92,10 @@ function WelcomeAsyncGate() {
       } catch {
         // fall through
       } finally {
-        if (!cancelled) setOnboardingReady(true);
+        if (!cancelled) {
+          setOnboardingReady(true);
+          setSessionChecked(true);
+        }
       }
     };
 
@@ -115,23 +120,56 @@ function WelcomeAsyncGate() {
     }
   }, [onboardingReady, skipIntro, hasSession, redirected]);
 
-  // Login / intro: Home is not coming — drop splash so the white gate is not the UI.
+  // Login / intro: Home is not coming — drop the native splash onto the branded boot screen.
   useEffect(() => {
     if (!onboardingReady) return;
     if (skipIntro && hasSession) return;
     hideAppSplash();
   }, [onboardingReady, skipIntro, hasSession]);
 
-  // No session: after Clerk loads, send to login
+  // No backend token yet. If Google/Apple is still signed in, exchange it
+  // and open Home. Only then show the login form.
   useEffect(() => {
-    if (!onboardingReady || redirected) return;
+    if (!onboardingReady || !sessionChecked || redirected) return;
     if (!skipIntro) return;
     if (hasSession) return;
     if (!authLoaded) return;
 
-    setRedirected(true);
-    router.replace("/auth/login");
-  }, [onboardingReady, skipIntro, hasSession, authLoaded, redirected]);
+    let cancelled = false;
+    void (async () => {
+      if (isSignedInRef.current) {
+        try {
+          const restored = await restoreBackendSessionFromClerk(
+            () => userRef.current,
+            () => getTokenRef.current()
+          );
+          if (cancelled) return;
+          if (restored) {
+            setHasSession(true);
+            setRedirected(true);
+            router.replace("/categories/HomeScreen");
+            return;
+          }
+        } catch {
+          // Exchange failed. The login form is the remaining path.
+        }
+      }
+      if (cancelled) return;
+      setRedirected(true);
+      router.replace("/auth/login");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    onboardingReady,
+    sessionChecked,
+    skipIntro,
+    hasSession,
+    authLoaded,
+    redirected,
+  ]);
 
   const handleIntroFinished = useCallback(() => setShowIntro(false), []);
 

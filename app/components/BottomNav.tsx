@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef } from "react";
 import {
-  InteractionManager,
   Pressable,
   StyleSheet,
   Text,
@@ -67,11 +66,11 @@ export default function BottomNav({
   // Idle warm: after first paint settles, pull Create flows into the JS cache
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = requestIdleCallback(() => {
       timeout = setTimeout(() => prefetchCreateFlows(), 1800);
     });
     return () => {
-      task.cancel();
+      cancelIdleCallback(task);
       if (timeout) clearTimeout(timeout);
     };
   }, []);
@@ -83,7 +82,7 @@ export default function BottomNav({
       queueMicrotask(() => playNavTapSound());
       if (tab === previousTab) return;
 
-      InteractionManager.runAfterInteractions(() => {
+      requestIdleCallback(() => {
         try {
           useMediaStore.getState().stopAudioFn?.();
         } catch {

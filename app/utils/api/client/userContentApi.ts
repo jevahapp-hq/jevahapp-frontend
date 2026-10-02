@@ -5,6 +5,25 @@ function emptyPagination(page: number, limit: number): PaginationMeta {
   return { page, limit, total: 0, totalPages: 0, hasMore: false };
 }
 
+function collectionAliases(key: string): string[] {
+  if (key === "videos") return ["videos", "media", "items", "content"];
+  if (key === "media") return ["media", "items", "content"];
+  if (key === "posts") return ["posts", "items"];
+  return [key, "items"];
+}
+
+/** Accept `{ videos }`, `{ data: { videos } }`, and `{ data: { data: { media } } }`. */
+export function pickUserCollection(result: any, key: string): any[] | null {
+  const bags = [result, result?.data, result?.data?.data];
+  for (const bag of bags) {
+    if (!bag || typeof bag !== "object") continue;
+    for (const name of collectionAliases(key)) {
+      if (Array.isArray(bag[name])) return bag[name];
+    }
+  }
+  return null;
+}
+
 /**
  * Posts, media and videos share one response shape that differs only in the
  * array's key, and the backend may return it wrapped in `data` or flat.
@@ -18,20 +37,18 @@ async function fetchUserCollection<K extends string>(
   label: string
 ): Promise<ApiResult<{ [P in K]: any[] } & { pagination: any }>> {
   try {
-    const result = await request(path, { cache: true });
+    const result = await request(path, { cache: false });
+    const items = pickUserCollection(result, key);
 
-    if (result.data) {
-      return { success: true, data: result.data };
-    }
-
-    const items = result[key];
     if (items) {
       return {
         success: true,
         data: {
           [key]: items,
           pagination:
-            result.pagination || {
+            result.pagination ||
+            result.data?.pagination ||
+            result.data?.data?.pagination || {
               page,
               limit,
               total: items?.length || 0,
@@ -47,10 +64,17 @@ async function fetchUserCollection<K extends string>(
       data: { [key]: [], pagination: emptyPagination(page, limit) } as any,
     };
   } catch (error: any) {
+    const message = error?.message || `Failed to fetch ${label}`;
+    // A slow profile-video load must not raise the red console overlay
+    // on top of Reels. The caller already treats this as a failed fetch.
+    if (/timeout|aborted/i.test(message)) {
+      console.warn(`Error fetching user ${label}:`, message);
+    } else {
     console.error(`Error fetching user ${label}:`, error);
+    }
     return {
       success: false,
-      error: error.message || `Failed to fetch ${label}`,
+      error: message,
     };
   }
 }

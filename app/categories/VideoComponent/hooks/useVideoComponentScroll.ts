@@ -4,7 +4,7 @@
  */
 
 import { Dimensions, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { getVideoKey } from "../utils";
 
 interface UseVideoComponentScrollProps {
@@ -16,6 +16,7 @@ interface UseVideoComponentScrollProps {
     pauseVideo: (key: string) => void;
     playVideoGlobally: (key: string) => void;
     currentlyVisibleVideo: string | null;
+    handleVideoVisibilityChange?: (visibleVideoKey: string | null) => void;
   };
   uploadedVideos: any[];
 }
@@ -27,8 +28,7 @@ export function useVideoComponentScroll({
   globalVideoStore,
   uploadedVideos,
 }: UseVideoComponentScrollProps) {
-  const [scrollDirection, setScrollDirection] = useState<"up" | "down" | null>(null);
-  const lastScrollY = useRef<number>(0);
+  const lastVisibleKeyRef = useRef<string | null>(null);
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -66,60 +66,36 @@ export function useVideoComponentScroll({
         });
 
         if (isAutoPlayEnabled) {
-          const currentScrollY = scrollY;
-          if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
-            setScrollDirection(currentScrollY > lastScrollY.current ? "down" : "up");
-            lastScrollY.current = currentScrollY;
-          }
-
-          const videoLayouts = Object.entries(videoLayoutsRef.current).sort(
-            (a, b) => a[1].y - b[1].y
-          );
+          const videoLayouts = Object.entries(videoLayoutsRef.current);
           let targetVideo: string | null = null;
-
-          if (videoLayouts.length === 0) return;
-
-          if (scrollDirection === "down") {
-            for (const [key, layout] of videoLayouts) {
-              const videoTop = layout.y;
-              const videoBottom = layout.y + layout.height;
-              const videoHeight = layout.height;
-              const footerStart = videoTop + videoHeight * 0.8;
-              const isFooterVisible =
-                footerStart < viewportBottom && videoBottom > viewportTop;
-              if (!isFooterVisible && videoTop < viewportBottom) {
-                targetVideo = key;
-                break;
-              }
-            }
-          } else if (scrollDirection === "up") {
-            for (let i = videoLayouts.length - 1; i >= 0; i--) {
-              const [key, layout] = videoLayouts[i];
-              const videoTop = layout.y;
-              const videoBottom = layout.y + layout.height;
-              const videoHeight = layout.height;
-              const intersectionTop = Math.max(viewportTop, videoTop);
-              const intersectionBottom = Math.min(viewportBottom, videoBottom);
-              const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-              const visibilityRatio = visibleHeight / videoHeight;
-              if (visibilityRatio >= 0.5 && videoTop < viewportBottom) {
-                targetVideo = key;
-                break;
-              }
-            }
-          } else {
-            if (videoLayouts.length > 0) {
-              const [firstKey, firstLayout] = videoLayouts[0];
-              const videoTop = firstLayout.y;
-              const videoBottom = firstLayout.y + firstLayout.height;
-              const isVisible = videoTop < viewportBottom && videoBottom > viewportTop;
-              if (isVisible) targetVideo = firstKey;
+          let bestRatio = 0;
+          for (const [key, layout] of videoLayouts) {
+            if (!layout || layout.height <= 0) continue;
+            const intersectionTop = Math.max(viewportTop, layout.y);
+            const intersectionBottom = Math.min(
+              viewportBottom,
+              layout.y + layout.height
+            );
+            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+            const ratio = visibleHeight / layout.height;
+            if (ratio > bestRatio) {
+              bestRatio = ratio;
+              targetVideo = key;
             }
           }
+          if (bestRatio < 0.45) targetVideo = null;
 
-          if (targetVideo && targetVideo !== globalVideoStore.currentlyVisibleVideo) {
+          // Only when the video in view changes. Replaying the same card on
+          // every scroll tick undoes a tap-to-pause.
+          if (targetVideo !== lastVisibleKeyRef.current) {
+            lastVisibleKeyRef.current = targetVideo;
             try {
-              globalVideoStore.playVideoGlobally(targetVideo);
+              if (targetVideo) {
+                globalVideoStore.handleVideoVisibilityChange?.(targetVideo);
+                globalVideoStore.playVideoGlobally(targetVideo);
+              } else {
+                globalVideoStore.handleVideoVisibilityChange?.(null);
+              }
             } catch (error) {
               console.warn("Error playing video globally:", error);
             }
@@ -129,7 +105,7 @@ export function useVideoComponentScroll({
         console.error("Error in handleScroll:", error);
       }
     },
-    [isAutoPlayEnabled, globalVideoStore, scrollDirection]
+    [isAutoPlayEnabled, globalVideoStore]
   );
 
   const handleScrollEnd = useCallback(() => {

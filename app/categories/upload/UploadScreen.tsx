@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BackHandler,
-  InteractionManager,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -43,7 +42,9 @@ import { useAIDescription } from "./hooks/useAIDescription";
 import { useMediaPickers } from "./hooks/useMediaPickers";
 import { useUploadFlow } from "./hooks/useUploadFlow";
 import { useUploadFormState } from "./hooks/useUploadFormState";
+import { releaseUploadVideoPreview } from "./utils/captureUploadVideoPreview";
 import { isUploadFormReady } from "./utils/eligibilityRules";
+import { isUploadGuidelineAlertOpen } from "./utils/uploadGuidelineAlert";
 import {
   isUploadFormDirty,
   saveUploadDraft,
@@ -58,6 +59,8 @@ export default function UploadScreen() {
     (Platform.OS === "android" ? 24 : 0);
   /** Secondary chrome after first paint — keeps open transition snappy. */
   const [deferChrome, setDeferChrome] = useState(true);
+  /** iPhone keeps the progress modal up for a moment after it closes. */
+  const [progressDismissed, setProgressDismissed] = useState(true);
   const [draftPromptVisible, setDraftPromptVisible] = useState(false);
   const [toast, setToast] = useState<{
     visible: boolean;
@@ -66,11 +69,23 @@ export default function UploadScreen() {
   }>({ visible: false, text: "", type: "info" });
 
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = requestIdleCallback(() => {
       setDeferChrome(false);
     });
-    return () => task.cancel();
+    return () => cancelIdleCallback(task);
   }, []);
+
+  const [progressMounted, setProgressMounted] = useState(false);
+
+  useEffect(() => {
+    if (form.loading) {
+      setProgressMounted(true);
+      setProgressDismissed(false);
+      return;
+    }
+    const timer = setTimeout(() => setProgressDismissed(true), 450);
+    return () => clearTimeout(timer);
+  }, [form.loading]);
 
   const showSoftNotice = useCallback((text: string) => {
     setToast({ visible: true, text, type: "info" });
@@ -92,11 +107,15 @@ export default function UploadScreen() {
 
   const leaveUpload = useCallback(() => {
     setDraftPromptVisible(false);
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
+    releaseUploadVideoPreview();
+    requestAnimationFrame(() => {
+      if (router.canGoBack()) router.back();
+      else router.replace("/");
+    });
   }, []);
 
   const handleCloseAttempt = useCallback(() => {
+    if (isUploadGuidelineAlertOpen()) return;
     if (form.loading) return;
     if (draftPromptVisible) return;
     if (!formDirty) {
@@ -224,10 +243,14 @@ export default function UploadScreen() {
 
   return (
     <>
-      {form.loading ? (
+      {progressMounted ? (
         <UploadProgressModal
           visible={form.loading}
           uploadState={form.uploadState}
+          onDismiss={() => {
+            setProgressMounted(false);
+            setProgressDismissed(true);
+          }}
         />
       ) : null}
 
@@ -347,7 +370,12 @@ export default function UploadScreen() {
                     opacity: form.uploadState.status === "verifying" ? 0.5 : 1,
                   }}
                   activeOpacity={0.8}
-                  disabled={form.uploadState.status === "verifying"}
+                  disabled={
+                    form.loading ||
+                    form.uploadState.status === "verifying" ||
+                    form.uploadState.status === "success" ||
+                    !!result
+                  }
                 >
                   <Text
                     className="text-white font-semibold"
@@ -379,7 +407,7 @@ export default function UploadScreen() {
         onClose={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      {result ? (
+      {result && progressDismissed ? (
         <UploadResultModal
           result={result}
           onPrimary={() => {

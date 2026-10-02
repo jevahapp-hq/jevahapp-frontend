@@ -9,16 +9,28 @@ interface FeedVideoSurfaceProps {
   height?: number;
   width?: number;
   /**
-   * Feed cards and fullscreen Reels cover-fill their box.
+   * Feed cards contain-fit so heads stay in frame.
    */
   contentFit?: "contain" | "cover";
+  /**
+   * Feed cards place the surface in normal flow at a fixed size.
+   * An absolute surface that changes position paints into the wrong card.
+   */
+  inline?: boolean;
+  /**
+   * When true the Android surface stays visible. With it off, the surface
+   * stays invisible until a first-frame callback that sometimes never arrives,
+   * so the reel plays audio on a black page.
+   */
+  useExoShutter?: boolean;
 }
 
 /**
- * APK player: full thumbnail width, cover-fill.
- * Do NOT use overflow clip, opacity, or absoluteFill on VideoView —
- * those blank the picture on Android while audio still plays.
- * Immediate parent stays transparent so SurfaceView can punch through.
+ * Feed cards pass a fixed picture size (inline) and use a texture view so a
+ * resized surface cannot draw into the card above or below. Do not change
+ * that size after mount.
+ * Do NOT use opacity or absoluteFill on VideoView — those blank the picture
+ * on Android while audio still plays.
  */
 export function FeedVideoSurface({
   player,
@@ -27,11 +39,13 @@ export function FeedVideoSurface({
   height = FEED_VIDEO_PLAYER_HEIGHT,
   width,
   contentFit = "cover",
+  inline = false,
+  useExoShutter = false,
 }: FeedVideoSurfaceProps) {
   return (
     <View
       style={[
-        styles.host,
+        inline ? styles.inlineHost : styles.host,
         { height },
         width != null ? { width } : null,
         contentFit === "contain" ? styles.containHost : null,
@@ -41,12 +55,13 @@ export function FeedVideoSurface({
     >
       <VideoView
         player={player}
-        style={styles.video}
+        style={[styles.video, inline ? { width: width ?? "100%", height } : null]}
         contentFit={contentFit}
         nativeControls={false}
         fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
-        useExoShutter={false}
+        useExoShutter={useExoShutter}
+        surfaceType={inline ? "textureView" : "surfaceView"}
         pointerEvents="none"
         onFirstFrameRender={onFirstFrameRender}
       />
@@ -60,7 +75,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
-    backgroundColor: "transparent",
+    backgroundColor: "#000",
+  },
+  inlineHost: {
+    backgroundColor: "#000",
   },
   containHost: {
     backgroundColor: "#000",
@@ -68,6 +86,6 @@ const styles = StyleSheet.create({
   video: {
     width: "100%",
     height: "100%",
-    backgroundColor: "transparent",
+    backgroundColor: "#000",
   },
 });

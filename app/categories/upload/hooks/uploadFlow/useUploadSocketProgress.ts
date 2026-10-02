@@ -18,11 +18,14 @@ export function useUploadSocketProgress(
   setUploadState: (
     v: UploadState | ((prev: UploadState) => UploadState)
   ) => void,
-  stopSimulated: () => void
+  stopSimulated: () => void,
+  onTerminalError?: (message: string) => void
 ) {
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUploadIdRef = useRef<string | null>(null);
   const isUsingRealTimeProgressRef = useRef(false);
+  const onTerminalErrorRef = useRef(onTerminalError);
+  onTerminalErrorRef.current = onTerminalError;
 
   const { startPoll, stopPoll, markRealtimeEvent } = useUploadStatusPoll(
     setUploadState,
@@ -71,6 +74,10 @@ export function useUploadSocketProgress(
 
           markRealtimeEvent(uploadId);
           const mapped = mapUploadProgressEvent(progressData);
+          if (mapped.status === "error") {
+            onTerminalErrorRef.current?.(mapped.message || "Upload failed");
+            return;
+          }
           setUploadState((prev) => ({
             status: mapped.status,
             progress: Math.max(prev.progress || 0, mapped.progress),

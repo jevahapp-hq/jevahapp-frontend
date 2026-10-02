@@ -9,7 +9,6 @@ import type {
   EligibilityStatus,
   MediaFile,
 } from "../types";
-import { AiDescriptionBlock } from "./AiDescriptionBlock";
 import { CategoryTypeSection } from "./CategoryTypeSection";
 import { FIELD_HELP, FieldLabel } from "./FieldLabel";
 import { TitleDescriptionFields } from "./TitleDescriptionFields";
@@ -49,7 +48,6 @@ export function UploadFormFields({
   description,
   setDescription,
   file,
-  thumbnail,
   selectedCategory,
   setSelectedCategory,
   selectedType,
@@ -59,10 +57,6 @@ export function UploadFormFields({
   eligibilityStatus,
   setEligibilityStatus,
   validateMediaEligibilityLocal,
-  isGeneratingDescription,
-  descriptionGenerationError,
-  bibleVerses,
-  onGenerateAIDescription,
 }: UploadFormFieldsProps) {
   const [helpKey, setHelpKey] = useState<string | null>(null);
 
@@ -98,6 +92,7 @@ export function UploadFormFields({
         }}
       />
 
+      {/* Description generation is hidden — a write-up is not required to post.
       <AiDescriptionBlock
         title={title}
         hasFile={!!file}
@@ -107,6 +102,7 @@ export function UploadFormFields({
         bibleVerses={bibleVerses}
         onGenerateAIDescription={onGenerateAIDescription}
       />
+      */}
 
       <CategoryTypeSection
         file={file}

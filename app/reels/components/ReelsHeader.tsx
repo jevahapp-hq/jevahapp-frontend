@@ -33,7 +33,8 @@ export const ReelsHeader: React.FC<ReelsHeaderProps> = ({
     >
       {/* Back Arrow */}
       <TouchableOpacity
-        onPress={onBackPress}
+        onPressIn={onBackPress}
+        delayPressIn={0}
         style={{
           padding: getResponsiveSpacing(8, 10, 12),
           minWidth: getTouchTargetSize(),
@@ -69,7 +70,8 @@ export const ReelsHeader: React.FC<ReelsHeaderProps> = ({
 
       {/* Close Icon */}
       <TouchableOpacity
-        onPress={onBackPress}
+        onPressIn={onBackPress}
+        delayPressIn={0}
         style={{
           padding: getResponsiveSpacing(8, 10, 12),
           minWidth: getTouchTargetSize(),

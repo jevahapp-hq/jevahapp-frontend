@@ -87,10 +87,29 @@ test("strangers cannot see another user's under-review video", () => {
   assert.equal(canViewerSeeMedia(underReviewMine, OWNER), true);
   assert.equal(canViewerSeeMedia(underReviewMine, OTHER), false);
   assert.equal(canViewerSeeMedia(approvedOther, OWNER), true);
+  assert.equal(
+    canViewerSeeMedia({ status: "under_review", uploadedBy: { _id: OWNER } }, OTHER),
+    false
+  );
+  assert.equal(
+    canViewerSeeMedia({ moderationStatus: "under_review" }, OTHER),
+    false
+  );
+  assert.equal(
+    canViewerSeeMedia({ moderationStatus: "pending", uploadedBy: { _id: OWNER } }, OTHER),
+    false
+  );
 });
 
 test("treats pending as under review for banner/layout", () => {
   assert.equal(isUnderReview({ moderationStatus: "under_review" }), true);
   assert.equal(isUnderReview({ moderationStatus: "pending" }), true);
   assert.equal(isUnderReview({ moderationStatus: "approved" }), false);
+  assert.equal(
+    isUnderReview({
+      moderationStatus: "under_review",
+      status: "approved",
+    } as any),
+    false
+  );
 });

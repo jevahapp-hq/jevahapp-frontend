@@ -21,6 +21,7 @@ import { playbackKeyToContentKey } from "../../video-feed";
 import { recordFeedAffinity } from "../utils/feedAffinityStore";
 import { buildReelsVideoList } from "../utils/buildReelsVideoList";
 import { mirrorFeedEngagementEvent } from "../../../../shared/feed";
+import { buildContentShareFromItem } from "../../../../shared/share/contentShare";
 
 let lastLikeRateLimitAlertAt = 0;
 
@@ -395,11 +396,9 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = mapContentTypeForBackend(item.contentType || "media");
-        const result = await Share.share({
-          title: item.title,
-          message: `Check this out: ${item.title}\n${item.fileUrl}`,
-          url: item.fileUrl,
-        });
+        const result = await Share.share(
+          buildContentShareFromItem(item, contentId)
+        );
 
         // User closed the sheet — do not ping analytics
         if (result.action === Share.dismissedAction) {

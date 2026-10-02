@@ -32,8 +32,8 @@ export async function handleUploadHttpError(params: {
   setModerationError: (v: ModerationError | null) => void;
   setUploadResult: (v: UploadResultState | null) => void;
   setUploadState: (v: UploadState) => void;
-  /** Called when the upload actually succeeded behind a gateway timeout. */
-  onLateSuccess?: (mediaId?: string) => void;
+  /** Called when the upload landed even though the HTTP reply looked like a failure. */
+  onLateSuccess?: (mediaId?: string) => void | Promise<void>;
 }): Promise<boolean> {
   const {
     res,
@@ -55,7 +55,7 @@ export async function handleUploadHttpError(params: {
    * "Unexpected response (504)." because nginx returns an HTML error page and
    * JSON parsing yields null.
    */
-  if (isGatewayTimeout(res.status) && uploadId) {
+  if (uploadId && (isGatewayTimeout(res.status) || res.status >= 500)) {
     setUploadState({
       status: "verifying",
       progress: 95,
@@ -63,22 +63,6 @@ export async function handleUploadHttpError(params: {
     });
 
     const outcome = await reconcileUploadOutcome(uploadId);
-
-    if (outcome.status === "completed") {
-      onLateSuccess?.(outcome.mediaId);
-      return true;
-    }
-
-    if (outcome.status === "processing") {
-      setUploadResult(
-        buildErrorResult(
-          "Your upload is still processing on the server. It should appear in your profile shortly — please don't upload it again, or you'll end up with two copies.",
-          "Still processing"
-        )
-      );
-      setUploadState({ status: "idle", progress: 0, message: "" });
-      return true;
-    }
 
     if (outcome.status === "failed") {
       setUploadResult(
@@ -92,13 +76,9 @@ export async function handleUploadHttpError(params: {
       return true;
     }
 
-    setUploadResult(
-      buildErrorResult(
-        "The server took too long to respond, so we couldn't confirm this upload. Check your profile first — if it isn't there, try again.",
-        "Couldn't confirm upload"
-      )
-    );
-    setUploadState({ status: "idle", progress: 0, message: "" });
+    // completed, still processing, or unconfirmed after a proxy timeout.
+    // The write often committed. Saying "failed, retry" is how duplicates get posted.
+    await onLateSuccess?.(outcome.mediaId);
     return true;
   }
 

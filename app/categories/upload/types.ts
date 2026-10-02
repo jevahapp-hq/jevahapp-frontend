@@ -9,6 +9,10 @@ export type MediaFile = {
   size?: number;
   /** Local probe / picker duration in seconds */
   durationSec?: number;
+  /** Cover crop: 1:1, 9:16, or 16:9. */
+  thumbnailAspect?: "1:1" | "9:16" | "16:9";
+  width?: number;
+  height?: number;
 };
 
 export type UploadState = {

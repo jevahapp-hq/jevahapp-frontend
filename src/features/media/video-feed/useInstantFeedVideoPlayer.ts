@@ -1,7 +1,7 @@
 import type { VideoPlayer } from "expo-video";
 import { useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getPlayhead, savePlayhead } from "./playheadCache";
+import { feedStartSeconds, savePlayhead } from "./playheadCache";
 import { readPlayerCurrentTimeSec, runWithLivePlayer } from "./safeVideoPlayer";
 import {
   fixOverEncodedMediaUrl,
@@ -66,10 +66,7 @@ export function useInstantFeedVideoPlayer({
       p.timeUpdateEventInterval = timeUpdateEventInterval;
       if (source) {
         if (restorePlayhead) {
-          const saved = getPlayhead(source);
-          if (saved > 0.2) {
-            p.currentTime = saved;
-          }
+          p.currentTime = feedStartSeconds(source);
         }
         if (mutedPrime) p.play();
       }
@@ -184,13 +181,10 @@ export function useInstantFeedVideoPlayer({
         player.muted = true;
         player.volume = 0;
         if (restorePlayhead) {
-          const saved = getPlayhead(source);
-          if (saved > 0.2) {
-            try {
-              player.currentTime = saved;
-            } catch {
-              // no-op
-            }
+          try {
+            player.currentTime = feedStartSeconds(source);
+          } catch {
+            // no-op
           }
         }
         if (mutedPrime) player.play();
@@ -238,13 +232,10 @@ export function useInstantFeedVideoPlayer({
               player.muted = true;
               player.volume = 0;
               if (restorePlayhead) {
-                const saved = getPlayhead(source);
-                if (saved > 0.2) {
-                  try {
-                    player.currentTime = saved;
-                  } catch {
-                    // no-op
-                  }
+                try {
+                  player.currentTime = feedStartSeconds(source);
+                } catch {
+                  // no-op
                 }
               }
               if (mutedPrime) player.play();
@@ -301,10 +292,10 @@ export function useInstantFeedVideoPlayer({
 
   const handleFirstFrameRender = useCallback(() => {
     if (restorePlayhead) {
-      const saved = getPlayhead(source);
+      const startAt = feedStartSeconds(source);
       const now = readPlayerCurrentTimeSec(player);
-      // Don't reveal a remounted player sitting at 0 while we still need to seek.
-      if (saved > 0.5 && now < saved - 0.4) return;
+      // Don't reveal the blank frame at 0 while the resume seek is still pending.
+      if (startAt > 0.05 && now + 0.04 < startAt) return;
     }
     markNativeFirstFrame();
   }, [markNativeFirstFrame, source, player, restorePlayhead]);
@@ -318,8 +309,8 @@ export function useInstantFeedVideoPlayer({
         if (currentTime > 0.15) savePlayhead(source, currentTime);
         if (firstFramePaintedRef.current) return;
         if (restorePlayhead) {
-          const saved = getPlayhead(source);
-          if (saved > 0.5 && currentTime < saved - 0.4) return;
+          const startAt = feedStartSeconds(source);
+          if (startAt > 0.05 && currentTime + 0.04 < startAt) return;
         }
         // Decoder has time, but the SurfaceView can still be black. Wait a
         // beat so the still stays up until a real frame can composite.

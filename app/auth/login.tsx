@@ -1,8 +1,9 @@
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Image,
@@ -14,8 +15,17 @@ import {
 import { authToast } from "../components/auth/authToastBus";
 import AuthHeader from "../components/AuthHeader";
 import { loginDebugger } from "../utils/loginDebugger";
+import { restoreBackendSessionFromClerk } from "../utils/restoreClerkSession";
 
 export default function LoginScreen() {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
+  const userRef = useRef(user);
+  userRef.current = user;
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const isSignedInRef = useRef(isSignedIn);
+  isSignedInRef.current = isSignedIn;
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,9 +38,10 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // On mount, restore last email and rememberMe choice, and optionally fast‑forward
-  // straight to Home if we still have a token and the user opted into Remember Me.
+  // Restore email prefs. If a real session or Google/Apple sign-in is still
+  // on this phone, leave this form and open Home.
   useEffect(() => {
+    if (!isLoaded) return;
     let cancelled = false;
 
     const hydrateFromStorage = async () => {
@@ -53,36 +64,44 @@ export default function LoginScreen() {
         }
 
         const rememberFlag = storedRemember === "true";
-        if (rememberFlag) {
-          setRememberMe(true);
+        if (rememberFlag) setRememberMe(true);
 
-          // Only skip the form if the token is still valid on *this* API.
-          // Stale prod tokens against local Mongo used to bounce users back in.
-          if (sessionToken) {
-            try {
-              const { getApiBaseUrl } = await import(
-                "../utils/environmentManager"
+        // A saved backend token means they are still signed in. Do not
+        // keep the form up just because Remember Me was off.
+        if (sessionToken) {
+          try {
+            const { getApiBaseUrl } = await import(
+              "../utils/environmentManager"
+            );
+            const meRes = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${sessionToken}`,
+                "Content-Type": "application/json",
+              },
+            });
+            if (cancelled) return;
+            if (meRes.ok) {
+              const { markBackendSessionPresent } = await import(
+                "../utils/sessionAuth"
               );
-              const meRes = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
-                method: "GET",
-                headers: {
-                  Authorization: `Bearer ${sessionToken}`,
-                  "Content-Type": "application/json",
-                },
-              });
-              if (cancelled) return;
-              if (meRes.ok) {
-                router.replace("/categories/HomeScreen");
-                return;
-              }
-              const { clearLocalSessionState } = await import(
-                "../utils/sessionExpired"
-              );
-              await clearLocalSessionState();
-            } catch {
-              // Network blip — stay on login; do not auto-enter with unknown session
+              markBackendSessionPresent();
+              router.replace("/categories/HomeScreen");
+              return;
             }
+          } catch {
+            // Network blip — stay on login; do not auto-enter with unknown session
           }
+        }
+
+        if (isSignedInRef.current) {
+          const restored = await restoreBackendSessionFromClerk(
+            () => userRef.current,
+            () => getTokenRef.current(),
+            { forceExchange: true }
+          );
+          if (cancelled) return;
+          if (restored) router.replace("/categories/HomeScreen");
         }
       } catch (err) {
         // console.warn("Failed to restore login prefs from storage:", err);
@@ -94,7 +113,7 @@ export default function LoginScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isLoaded]);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

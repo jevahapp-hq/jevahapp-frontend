@@ -26,12 +26,14 @@ export const ModerationBadge: React.FC<ModerationBadgeProps> = ({ status, showLa
                 };
             case 'under_review':
             case 'pending':
-            default:
+            case 'in_review':
                 return {
                     text: UNDER_REVIEW_BADGE_LABEL,
                     color: '#FFA500', // Orange
                     backgroundColor: 'rgba(255, 165, 0, 0.1)',
                 };
+            default:
+                return null;
         }
     };
 

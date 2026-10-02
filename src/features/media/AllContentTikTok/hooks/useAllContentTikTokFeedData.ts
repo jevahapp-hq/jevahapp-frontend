@@ -2,17 +2,20 @@
  * useAllContentTikTokFeedData - Feed data, helpers, and hydration effects
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { InteractionManager } from "react-native";
 import { useInteractionStore } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { getPersistedStats, getViewed } from "../../../../../app/utils/persistentStorage";
 import { getLiteStatsHydrateCount, isLiteProfileActive } from "../../../../shared/lite/liteProfile";
 import type { ContentType, MediaItem } from "../../../../shared/types";
+import { canonicalMediaFileUrl } from "../../../../shared/media/ownUploads";
 import {
   categorizeContent,
   filterContentByType,
-  getMostRecentItem,
 } from "../../../../shared/utils/contentHelpers";
+import {
+  mediaItemId,
+  resolveMostRecentItem,
+} from "../../../../shared/utils/mostRecentItem";
 
 export interface UseAllContentTikTokFeedDataParams {
   mediaList: MediaItem[];
@@ -43,11 +46,16 @@ export function useAllContentTikTokFeedData(
     // Dedupe by id — duplicate rows silently disappear in FlashList under
     // Coming Soon (same key twice → later cells dropped).
     const seen = new Set<string>();
+    const seenUrls = new Set<string>();
     const unique: MediaItem[] = [];
     for (const item of filtered) {
-      const id = String(item._id || (item as any).id || item.fileUrl || "");
+      const id = String(item._id || (item as any).id || "");
+      const url = canonicalMediaFileUrl(item);
+      const remoteUrl = url && !url.startsWith("file:") ? url : "";
       if (id && seen.has(id)) continue;
+      if (remoteUrl && seenUrls.has(remoteUrl)) continue;
       if (id) seen.add(id);
+      if (remoteUrl) seenUrls.add(remoteUrl);
       unique.push(item);
     }
     return unique;
@@ -58,45 +66,25 @@ export function useAllContentTikTokFeedData(
     [filteredMediaList]
   );
 
-  const mostRecentItem = useMemo(() => {
-    const allItems = [
-      ...categorizedContent.videos,
-      ...categorizedContent.music,
-      ...categorizedContent.ebooks,
-      ...categorizedContent.sermons,
-    ];
-    return getMostRecentItem(allItems);
-  }, [categorizedContent]);
-
-  // Sticky most-recent for this contentType session so Coming Soon `rest`
-  // doesn't reshuffle when the feed order jitters on refetch.
-  const stickyMostRecentIdRef = useRef<string | null>(null);
-  const stickyContentTypeRef = useRef(contentType);
-  if (stickyContentTypeRef.current !== contentType) {
-    stickyContentTypeRef.current = contentType;
-    stickyMostRecentIdRef.current = null;
+  // Keep the real newest row. A reshuffled For You page must not swap it
+  // for whichever item happens to be first, and a missing date must not win.
+  const mostRecentPinRef = useRef<string | null>(null);
+  const mostRecentTypeRef = useRef(contentType);
+  if (mostRecentTypeRef.current !== contentType) {
+    mostRecentTypeRef.current = contentType;
+    mostRecentPinRef.current = null;
   }
-  const incomingMostRecentId =
-    mostRecentItem?._id || (mostRecentItem as any)?.id || null;
-  if (!stickyMostRecentIdRef.current && incomingMostRecentId) {
-    stickyMostRecentIdRef.current = String(incomingMostRecentId);
+  const stableMostRecentItem = resolveMostRecentItem(
+    filteredMediaList,
+    mostRecentPinRef.current
+  );
+  const stableMostRecentId = mediaItemId(stableMostRecentItem);
+  if (stableMostRecentId && mostRecentPinRef.current !== stableMostRecentId) {
+    mostRecentPinRef.current = stableMostRecentId;
   }
-  const stickyMostRecentId = stickyMostRecentIdRef.current;
-
-  const stableMostRecentItem = useMemo(() => {
-    if (!stickyMostRecentId) return mostRecentItem;
-    const match = (filteredMediaList || []).find(
-      (item) => String(item._id || (item as any).id || "") === stickyMostRecentId
-    );
-    return match || mostRecentItem;
-  }, [filteredMediaList, mostRecentItem, stickyMostRecentId]);
 
   const { firstFour, nextFour, rest } = useMemo(() => {
-    const mostRecentId =
-      stableMostRecentItem?._id ||
-      (stableMostRecentItem as any)?.id ||
-      stickyMostRecentId ||
-      null;
+    const mostRecentId = stableMostRecentId || null;
     const remaining = (filteredMediaList || []).filter((item) => {
       if (!mostRecentId) return true;
       const id = item._id || (item as any).id;
@@ -107,7 +95,7 @@ export function useAllContentTikTokFeedData(
       nextFour: [],
       rest: remaining.slice(4),
     };
-  }, [filteredMediaList, stableMostRecentItem, stickyMostRecentId]);
+  }, [filteredMediaList, stableMostRecentItem, stableMostRecentId]);
 
   // Hydrate liked/saved from feed
   useEffect(() => {
@@ -135,18 +123,16 @@ export function useAllContentTikTokFeedData(
     const items = (filteredMediaList || []).slice(0, getLiteStatsHydrateCount());
     if (items.length === 0) return;
     const ids = items.map((i) => i._id).filter(Boolean) as string[];
-    InteractionManager.runAfterInteractions(async () => {
+    requestIdleCallback(() => {
+      void (async () => {
       try {
         await useInteractionStore
           .getState()
           .loadBatchContentStats(ids, "media");
-      } catch (e) {
-        if (__DEV__)
-          console.warn(
-            "⚠️ Batch stats failed:",
-            e instanceof Error ? e.message : e
-          );
-      }
+        } catch {
+          // Stats hydrate is best-effort; the feed already rendered.
+        }
+      })();
     });
   }, [filteredMediaList]);
 
@@ -171,7 +157,9 @@ export function useAllContentTikTokFeedData(
     };
 
     if (mediaList.length > 0) {
-      InteractionManager.runAfterInteractions(() => loadAllData());
+      requestIdleCallback(() => {
+        void loadAllData();
+      });
     } else {
       setIsLoadingContent(false);
     }

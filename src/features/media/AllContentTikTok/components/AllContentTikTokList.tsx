@@ -1,9 +1,14 @@
+import { Image } from "expo-image";
 import { FlashList } from "@shopify/flash-list";
-import React, { useCallback, useMemo } from "react";
-import { RefreshControl, useWindowDimensions, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { Platform, RefreshControl, useWindowDimensions, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
 import { detectMediaType, isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
-import { getFeedVideoRowSize } from "../../video-feed";
+import { getFeedVideoRowSize, posterUriFromMedia } from "../../video-feed";
+import {
+  scrollSpeedIsFast,
+  setFeedScrollingFast,
+} from "../utils/feedScrollPace";
 import type { FeedRow } from "../types";
 import type { MediaItem } from "../../../../shared/types";
 import { FeedSectionTitle } from "./FeedSectionTitle";
@@ -54,6 +59,69 @@ export function AllContentTikTokList({
   renderContentByType,
 }: Props) {
   const { width: viewportWidth } = useWindowDimensions();
+  const rowSize = estimatedItemSize || getFeedVideoRowSize({ viewportWidth });
+  /**
+   * One row is ~550px. A 520px iOS window unmounts the next card during a
+   * flick, so the category paints white until the cell catches up.
+   */
+  const iosBuffer = Math.round(rowSize * 3.5);
+  const scrollYRef = useRef(0);
+  const scrollTRef = useRef(0);
+  const posterPrefetchAtRef = useRef(0);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const settleFeedScroll = useCallback(() => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      setFeedScrollingFast(false);
+    }, 140);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      setFeedScrollingFast(false);
+    };
+  }, []);
+
+  const prefetchPostersAround = useCallback(
+    (offsetY: number) => {
+      const now = Date.now();
+      if (now - posterPrefetchAtRef.current < 180) return;
+      posterPrefetchAtRef.current = now;
+      const start = Math.max(0, Math.floor(offsetY / rowSize) - 1);
+      const urls: string[] = [];
+      for (let i = start; i < start + 8 && i < listData.length; i++) {
+        const row = listData[i];
+        if (!row || row.rowType !== "media") continue;
+        const uri = posterUriFromMedia(row.item);
+        if (uri) urls.push(uri);
+      }
+      if (urls.length) void Image.prefetch(urls, "memory-disk");
+    },
+    [listData, rowSize]
+  );
+
+  const onFeedScroll = useCallback(
+    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const y = event.nativeEvent.contentOffset.y;
+      const now = Date.now();
+      const dt = now - scrollTRef.current;
+      const dy = y - scrollYRef.current;
+      scrollYRef.current = y;
+      scrollTRef.current = now;
+      if (scrollSpeedIsFast(dy, dt)) {
+        if (settleTimerRef.current) {
+          clearTimeout(settleTimerRef.current);
+          settleTimerRef.current = null;
+        }
+        setFeedScrollingFast(true);
+      }
+      prefetchPostersAround(y);
+    },
+    [prefetchPostersAround]
+  );
   const getItemType = useCallback((row: FeedRow) => {
     if (row.rowType !== "media") return row.rowType;
     if (isAudioSermon(row.item)) return "media-audio";
@@ -160,15 +228,26 @@ export function AllContentTikTokList({
       scrollEnabled={!commentsOpen}
       viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
       scrollEventThrottle={16}
-      estimatedItemSize={
-        estimatedItemSize || getFeedVideoRowSize({ viewportWidth })
-      }
+      onScroll={onFeedScroll}
+      onScrollEndDrag={settleFeedScroll}
+      onMomentumScrollEnd={settleFeedScroll}
+      estimatedItemSize={rowSize}
       keyboardShouldPersistTaps="handled"
       onEndReached={onEndReached}
       onEndReachedThreshold={0.75}
-      removeClippedSubviews={liteActive}
-      overscan={liteActive ? 280 : 800}
-      drawDistance={liteActive ? drawDistance : 1600}
+      removeClippedSubviews={Platform.OS === "android" && liteActive}
+      overscan={
+        !isFeedActive ? 120 : Platform.OS === "ios" ? iosBuffer : liteActive ? 280 : 800
+      }
+      drawDistance={
+        !isFeedActive
+          ? 200
+          : Platform.OS === "ios"
+            ? iosBuffer
+            : liteActive
+              ? drawDistance
+              : 1600
+      }
     />
   );
 }

@@ -165,7 +165,7 @@ module.exports = (() => {
   // NativeWind wraps resolveRequest — apply aliases AFTER so they actually run.
   const config = withNativeWind(base, { input: "./global.css" });
   const innerResolve = config.resolver.resolveRequest;
-  config.maxWorkers = 2;
+  config.maxWorkers = 4;
 
   config.resolver.resolveRequest = (context, moduleName, platform) => {
     const kind = matchExpoRouterCtx(context, moduleName);

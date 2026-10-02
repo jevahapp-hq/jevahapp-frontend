@@ -4,8 +4,10 @@
  */
 
 import { enrichContentWithAuthor, resolveAuthorAvatar, resolveAuthorName, stampPayloadAuthor } from "../author";
+import { isModerationToken, readModerationStatus } from "../media/moderationStatus";
 import { ContentType, MediaItem } from "../types";
 import { belongsInVideoCategory, isEbook } from "./mediaTypeDetection";
+import { resolveMostRecentItem } from "./mostRecentItem";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "./timeAgo";
 
 /**
@@ -66,19 +68,27 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       favorite: stamped.favorite || stamped.likes || stamped.likeCount || stamped.totalLikes || 0,
       imageUrl: stamped.imageUrl || stamped.thumbnailUrl || stamped.fileUrl,
       thumbnailUrl: stamped.thumbnailUrl || stamped.imageUrl,
-      createdAt: stamped.createdAt || stamped.created_at || new Date().toISOString(),
+      createdAt:
+        stamped.createdAt ||
+        stamped.created_at ||
+        stamped.publishedAt ||
+        stamped.published_at ||
+        "",
       duration: stamped.duration,
       fileMimeType: stamped.fileMimeType || stamped.mimeType,
-      moderationStatus:
-        stamped.moderationStatus ||
-        stamped.moderation_status ||
-        undefined,
+      moderationStatus: readModerationStatus(stamped),
+      publicationState:
+        stamped.publicationState || stamped.publication_state || null,
+      isHidden:
+        stamped.isHidden === true || stamped.is_hidden === true
+          ? true
+          : stamped.isHidden === false || stamped.is_hidden === false
+            ? false
+            : undefined,
       processingStatus: (() => {
-        const raw =
-          stamped.processingStatus ||
-          stamped.status ||
-          undefined;
+        const raw = stamped.processingStatus || stamped.status || undefined;
         if (raw == null || raw === "") return undefined;
+        if (isModerationToken(raw)) return undefined;
         const s = String(raw).toLowerCase();
         if (s === "queued") return "pending";
         return s;
@@ -229,15 +239,8 @@ export const categorizeContent = (items: MediaItem[]) => {
 /**
  * Get the most recent item from a list
  */
-export const getMostRecentItem = (items: MediaItem[]): MediaItem | null => {
-  if (!items || items.length === 0) return null;
-
-  return items.reduce((mostRecent, current) => {
-    const recentDate = new Date(mostRecent.createdAt || 0).getTime();
-    const currentDate = new Date(current.createdAt || 0).getTime();
-    return currentDate > recentDate ? current : mostRecent;
-  });
-};
+export const getMostRecentItem = (items: MediaItem[]): MediaItem | null =>
+  resolveMostRecentItem(items, null);
 
 /**
  * Get time ago string from a date string
@@ -270,6 +273,6 @@ export const isValidUri = (uri: any): boolean => {
   return (
     typeof uri === "string" &&
     uri.trim().length > 0 &&
-    (/^(https?|file):\/\//.test(uri.trim()) || uri.trim().startsWith("/"))
+    (/^(https?|file|content):\/\//.test(uri.trim()) || uri.trim().startsWith("/"))
   );
 };

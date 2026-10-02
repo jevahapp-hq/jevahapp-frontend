@@ -4,6 +4,8 @@
  * Isolates video metadata logic for easier debugging and testing.
  */
 import { useMemo } from "react";
+import { reelVideoKey } from "../reelScrollIndex";
+import { collectMediaDeleteIds } from "../../utils/mediaDelete/mediaDeleteIds";
 import { getUserDisplayNameFromContent } from "../../utils/userValidation";
 
 export interface UseReelsCurrentVideoParams {
@@ -94,7 +96,11 @@ export function useReelsCurrentVideo({
     return getUserDisplayNameFromContent(video, "Creator");
   };
 
-  const contentId = currentVideo._id || currentVideo.id || null;
+  const contentId =
+    collectMediaDeleteIds(currentVideo)[0] ||
+    currentVideo._id ||
+    currentVideo.id ||
+    null;
   const contentIdForHooks = (contentId || "") as string;
   const canUseBackendLikes = Boolean(contentIdForHooks);
   const activeContentType = (currentVideo.contentType || "video") as string;
@@ -141,7 +147,7 @@ export function useReelsCurrentVideo({
     }
   };
 
-  const reelKey = `reel-${currentVideo._id || currentVideo.id || currentIndex}-${currentVideo.title}-${getSpeakerName(currentVideo, "Creator")}`;
+  const reelKey = reelVideoKey(currentVideo, currentIndex);
   const modalKey = reelKey;
 
   const video = useMemo(

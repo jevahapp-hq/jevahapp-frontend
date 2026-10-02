@@ -85,10 +85,9 @@ export function buildModerationResult(
 export function buildSuccessResult(): UploadResultState {
   return {
     kind: "success",
-    title: "You're live",
-    message:
-      "Your content passed verification and is ready on the feed. Jump in now, or stay to post another.",
-    primaryLabel: "View feed",
+    title: "Successfully posted",
+    message: "Your post is currently under review.",
+    primaryLabel: "View All",
     secondaryLabel: "Stay here",
   };
 }

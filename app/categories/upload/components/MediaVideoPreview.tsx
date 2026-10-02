@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { captureUploadVideoPreview } from "../utils/captureUploadVideoPreview";
+import { startUploadVideoPreview } from "../utils/captureUploadVideoPreview";
 
 type Props = {
   uri: string;
@@ -54,7 +54,8 @@ function UploadVideoStill({ uri, fileName }: { uri: string; fileName?: string })
     setSource(null);
     setLoading(true);
 
-    void captureUploadVideoPreview(uri).then((thumb) => {
+    const session = startUploadVideoPreview(uri);
+    void session.promise.then((thumb) => {
       if (cancelled) return;
       setSource(thumb);
       setLoading(false);
@@ -62,6 +63,7 @@ function UploadVideoStill({ uri, fileName }: { uri: string; fileName?: string })
 
     return () => {
       cancelled = true;
+      session.release();
     };
   }, [uri]);
 

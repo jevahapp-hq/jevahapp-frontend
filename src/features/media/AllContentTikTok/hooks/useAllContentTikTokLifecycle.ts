@@ -1,6 +1,13 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
+import { reelKeyToKeepOnFeedBlur } from "../../video-feed/feedBlurPlayback";
+import {
+  areFeedDecodersSuspended,
+  resumeFeedDecoders,
+  suspendFeedDecoders,
+} from "../../video-feed/feedDecoderGate";
 import {
   findMediaRowIndex,
   resolveFeedResumeKey,
@@ -104,17 +111,30 @@ export function useAllContentTikTokLifecycle(options: {
       if (!isFeedActiveRef.current) {
         return;
       }
+      // Reels is still releasing its decoders on the way back. Starting
+      // feed players in that same moment is what closes the app.
+      const resumeDelay = areFeedDecodersSuspended() ? 300 : 0;
+      const resumeTimer = setTimeout(() => resumeFeedDecoders(), resumeDelay);
       restoreFeedAfterFullscreen();
       const clearGuard = setTimeout(() => {
         if (pendingResumeKeyRef) pendingResumeKeyRef.current = null;
       }, PENDING_RESUME_MS);
 
       return () => {
+        clearTimeout(resumeTimer);
         clearTimeout(clearGuard);
         clearResumeTimers();
+        suspendFeedDecoders();
         if (__DEV__) console.log("📱 Pausing all media on focus loss");
         try {
+          const keep = reelKeyToKeepOnFeedBlur(
+            useGlobalVideoStore.getState().currentlyPlayingVideo
+          );
+          if (keep) {
+            useGlobalVideoStore.getState().pauseAllExcept(keep);
+          } else {
           pauseAllMedia();
+          }
         } catch {
           /* ignore */
         }

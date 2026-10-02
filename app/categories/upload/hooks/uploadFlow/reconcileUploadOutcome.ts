@@ -45,7 +45,7 @@ function classify(stage?: string, progress?: number): UploadOutcome | null {
 async function readStatusOnce(
   uploadId: string,
   token: string
-): Promise<UploadOutcome> {
+): Promise<UploadOutcome & { missing?: boolean }> {
   const res = await fetch(
     `${API_BASE_URL}/api/media/upload/${encodeURIComponent(uploadId)}/status`,
     {
@@ -55,22 +55,25 @@ async function readStatusOnce(
   );
 
   // Endpoint absent — nothing to reconcile against.
-  if (res.status === 404 || res.status === 501) return { status: "unknown" };
+  if (res.status === 404 || res.status === 501) {
+    return { status: "unknown", missing: true };
+  }
   if (!res.ok) return { status: "unknown" };
 
   const json: any = await res.json().catch(() => null);
   const data = json?.data || json;
   if (!data || typeof data !== "object") return { status: "unknown" };
 
+  const mediaId = data.mediaId ? String(data.mediaId) : undefined;
+  // A mediaId means the document exists, even if a stage string says "error".
+  // Treating that as failure is what made a saved post look failed and get posted again.
+  if (mediaId) return { status: "completed", mediaId };
+
   const verdict = classify(data.stage, Number(data.progress));
-  if (verdict?.status === "completed") {
-    return { status: "completed", mediaId: data.mediaId };
-  }
+  if (verdict?.status === "completed") return { status: "completed" };
   if (verdict?.status === "failed") {
     return { status: "failed", message: data.message };
   }
-  // A mediaId alone means the document exists, so the write committed.
-  if (data.mediaId) return { status: "completed", mediaId: data.mediaId };
   return { status: "processing" };
 }
 
@@ -87,23 +90,24 @@ export async function reconcileUploadOutcome(
     const token = await TokenUtils.getAuthToken();
     if (!token) return { status: "unknown" };
 
-    let sawProcessing = false;
-
     while (Date.now() < deadline) {
-      const outcome = await readStatusOnce(uploadId, token).catch(
-        () => ({ status: "unknown" }) as UploadOutcome
-      );
+      const outcome = await readStatusOnce(uploadId, token).catch(() => ({
+        status: "unknown" as const,
+      }));
 
-      if (outcome.status === "completed" || outcome.status === "failed") {
+      if ("missing" in outcome && outcome.missing) return { status: "unknown" };
+      if (
+        outcome.status === "completed" ||
+        outcome.status === "failed" ||
+        outcome.status === "processing"
+      ) {
         return outcome;
       }
-      if (outcome.status === "processing") sawProcessing = true;
 
       await new Promise((r) => setTimeout(r, RECONCILE_INTERVAL_MS));
     }
 
-    // Timed out while it was demonstrably still working.
-    return sawProcessing ? { status: "processing" } : { status: "unknown" };
+    return { status: "unknown" };
   } catch {
     return { status: "unknown" };
   }

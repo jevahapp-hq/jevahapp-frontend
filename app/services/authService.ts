@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { getApiBaseUrl } from "../utils/api";
+import { assertAccountIdentity } from "../utils/accountIdentity";
 import { pickAuthSession } from "../utils/pickAuthSession";
 import {
   normalizeAuthEmail,
@@ -354,11 +355,30 @@ class AuthService {
     try {
       // console.log("🔍 Registering new user:", userData.email);
 
+      let identity;
+      try {
+        identity = assertAccountIdentity({
+          firstName: userData?.firstName,
+          lastName: userData?.lastName,
+          email: userData?.email,
+        });
+      } catch (identityError: any) {
+        const message =
+          identityError?.message ||
+          "A first name, last name, and email are required.";
+        return {
+          success: false,
+          error: message,
+          data: { message },
+          status: 0,
+        };
+      }
+
       const payload = {
         ...userData,
-        email: String(userData?.email || "").trim().toLowerCase(),
-        firstName: String(userData?.firstName || "").trim(),
-        lastName: String(userData?.lastName || "").trim(),
+        email: identity.email,
+        firstName: identity.firstName,
+        lastName: identity.lastName,
       };
 
       const response = await fetch(`${this.baseURL}/register`, {

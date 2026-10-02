@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { resolveMediaAudioUrl } from "../../../../shared/audio/mapToAudioTrack";
 import {
   detectMediaType,
@@ -14,6 +14,10 @@ import {
   FEED_PRELOAD_WARM_DISTANCE,
   FEED_WARM_IDLE_MOUNT_COUNT,
 } from "../../video-feed";
+import {
+  areFeedDecodersSuspended,
+  subscribeFeedDecoders,
+} from "../../video-feed/feedDecoderGate";
 import { warmVideoConnection } from "../utils/videoConnectionWarmer";
 import type { FeedRow } from "../types";
 import type { MediaItem } from "../../../../shared/types";
@@ -44,6 +48,11 @@ export function useFeedPlayerMounts(options: {
 
   const [mountedVideoKeys, setMountedVideoKeys] = useState<Set<string>>(
     () => new Set()
+  );
+  const decodersSuspended = useSyncExternalStore(
+    subscribeFeedDecoders,
+    areFeedDecodersSuspended,
+    () => false
   );
   const visitOrderRef = useRef<string[]>([]);
 
@@ -103,6 +112,11 @@ export function useFeedPlayerMounts(options: {
   );
 
   useEffect(() => {
+    if (decodersSuspended) {
+      setMountedVideoKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      return;
+    }
+
     const seqByKey = mediaSeqByKeyRef.current;
     const keyBySeq = mediaKeyBySeqRef.current;
     const hot = new Set<string>();
@@ -180,6 +194,7 @@ export function useFeedPlayerMounts(options: {
     });
   }, [
     currentlyVisibleVideo,
+    decodersSuspended,
     listData,
     addVideoNeighbors,
     isFeedVideo,

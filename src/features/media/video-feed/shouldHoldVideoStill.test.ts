@@ -19,10 +19,17 @@ test("holds the still until a native frame paints on an active surface", () => {
   );
 });
 
-test("holds the still while the surface is paused, covered, or off-screen", () => {
+test("a painted frame stays visible when the reel is paused off-screen", () => {
   assert.equal(
     shouldHoldVideoStill({
       nativeFirstFrame: true,
+      isSurfaceActive: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldHoldVideoStill({
+      nativeFirstFrame: false,
       isSurfaceActive: false,
     }),
     true

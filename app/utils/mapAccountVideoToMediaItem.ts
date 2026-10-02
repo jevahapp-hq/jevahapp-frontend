@@ -24,15 +24,25 @@ export function mapAccountVideoToMediaItem(
     owner?.fullName ||
     [owner?.firstName, owner?.lastName].filter(Boolean).join(" ").trim() ||
     undefined;
+  const raw = video as AccountVideo & {
+    fileUrl?: string;
+    playbackUrl?: string;
+    thumbnailUrl?: string;
+    imageUrl?: string;
+    moderationStatus?: MediaItem["moderationStatus"];
+  };
+  const fileUrl = raw.url || raw.fileUrl || raw.playbackUrl || "";
+  const thumb = raw.thumbnail || raw.thumbnailUrl || raw.imageUrl || fileUrl;
 
   return {
     _id: video._id,
     title: video.title || "Untitled Video",
     description: video.description || "",
     contentType: "videos",
-    fileUrl: video.url || "",
-    imageUrl: video.thumbnail || video.url || "",
-    thumbnailUrl: video.thumbnail || video.url || "",
+    fileUrl,
+    imageUrl: thumb,
+    thumbnailUrl: thumb,
+    moderationStatus: raw.moderationStatus,
     createdAt: video.createdAt,
     views: video.viewsCount || 0,
     favorite: video.likesCount || 0,

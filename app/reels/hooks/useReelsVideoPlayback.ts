@@ -3,10 +3,11 @@
  * Seek, mute, and session lifecycle for Reels (expo-video).
  */
 import type { VideoPlayer } from "expo-video";
-import { RefObject, useCallback, useEffect } from "react";
+import { RefObject, useCallback, useEffect, useRef } from "react";
 import { audioConfig } from "../../utils/audioConfig";
 import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { getAudibleReel, setAndroidAudibleReel } from "../reelAudible";
 
 export interface UseReelsVideoPlaybackParams {
   videoRefs: RefObject<Record<string, VideoPlayer>>;
@@ -21,6 +22,8 @@ export interface UseReelsVideoPlaybackParams {
   setIsDragging: (v: boolean) => void;
   globalVideoStore: any;
   userHasManuallyPaused: boolean;
+  /** Length already known from the feed card, so the scrubber is not 0:00. */
+  knownDurationMs?: number;
 }
 
 function durationMsOf(player: VideoPlayer | undefined, knownMs: number): number {
@@ -40,7 +43,12 @@ export function useReelsVideoPlayback({
   setMenuVisible,
   globalVideoStore,
   userHasManuallyPaused: _userHasManuallyPaused,
+  knownDurationMs = 0,
 }: UseReelsVideoPlaybackParams) {
+  const knownDurationRef = useRef(knownDurationMs);
+  knownDurationRef.current = knownDurationMs;
+  const manualPauseRef = useRef(_userHasManuallyPaused);
+  manualPauseRef.current = _userHasManuallyPaused;
   /**
    * Seek active reel. `position` is 0–1 fraction (preferred).
    * Values > 1 are treated as legacy 0–100 percent for older callers.
@@ -141,20 +149,36 @@ export function useReelsVideoPlayback({
 
   useEffect(() => {
     if (!modalKey) return;
-    setVideoDuration(0);
     setVideoPosition(0);
+    setVideoDuration(knownDurationRef.current);
     setShowPauseOverlay(false);
     setUserHasManuallyPaused(false);
+    manualPauseRef.current = false;
     useGlobalVideoStore.setState({ currentlyVisibleVideo: modalKey });
-    // playVideoGlobally already pauses every other player. pauseAllVideos()
-    // first would pause-then-play the same reel and crack the audio.
-    try {
-      globalVideoStore.playVideoGlobally(modalKey);
-    } catch (e) {
-      console.error("Error playing video:", e);
-    }
+    // The feed blur used to pause every player after this start, so fullscreen
+    // sat on the play icon. Start now and once more after that blur.
+    const play = () => {
+      if (manualPauseRef.current) return;
+      // A swipe may already have handed sound to the page on screen.
+      // Replaying this key would start the reel that just left.
+      const audible = getAudibleReel();
+      if (audible && audible !== modalKey) return;
+      setAndroidAudibleReel(modalKey);
+      try {
+        globalVideoStore.playVideoGlobally(modalKey);
+      } catch (e) {
+        console.error("Error playing video:", e);
+      }
+    };
+    play();
+    const frame = requestAnimationFrame(play);
+    const later = setTimeout(play, 160);
     setMenuVisible(false);
-  }, [modalKey]);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(later);
+    };
+  }, [modalKey, globalVideoStore, setMenuVisible, setShowPauseOverlay, setUserHasManuallyPaused, setVideoDuration, setVideoPosition]);
 
   return {
     seekToPosition,

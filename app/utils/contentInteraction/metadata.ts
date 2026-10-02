@@ -30,9 +30,6 @@ export async function getBatchMetadata(
     );
 
     if (!response.ok) {
-      devWarn(
-        `⚠️ batch-metadata failed (${response.status}), falling back to per-item`
-      );
       return {};
     }
 
@@ -85,6 +82,10 @@ export async function getContentMetadata(
   contentType: string
 ): Promise<ContentStats> {
   try {
+    if (!ctx.isValidObjectId(contentId)) {
+      return fallbackGetStats(ctx, contentId);
+    }
+
     const headers = await ctx.getAuthHeaders();
     const backendContentType = ctx.mapContentTypeToBackend(contentType);
 
@@ -99,9 +100,6 @@ export async function getContentMetadata(
     );
 
     if (!response.ok) {
-      devWarn(
-        `⚠️ Metadata endpoint failed (${response.status}), using fallback`
-      );
       return fallbackGetStats(ctx, contentId);
     }
 

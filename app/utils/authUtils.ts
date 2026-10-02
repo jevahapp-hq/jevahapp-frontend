@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Alert, Platform } from "react-native";
+import { assertAccountIdentity } from "./accountIdentity";
 import { getApiBaseUrl } from "./api";
 
 const API_BASE_URL =
@@ -147,12 +148,18 @@ export const authUtils = {
    * Send authentication request to backend with fallback
    */
   async sendAuthRequest(token: string, userInfo: UserInfo) {
+    const identity = assertAccountIdentity(userInfo);
     const apiUrl = `${API_BASE_URL}/api/auth/clerk-login`;
     console.log("🚀 Making request to:", apiUrl);
 
     const requestBody = {
       token,
-      userInfo,
+      userInfo: {
+        firstName: identity.firstName,
+        lastName: identity.lastName,
+        email: identity.email,
+        avatar: userInfo.avatar || "",
+      },
     };
 
     if (__DEV__) {
@@ -250,27 +257,30 @@ export const authUtils = {
       await TokenUtils.storeAuthToken(result.token);
     }
 
-    // Store user data
+    // Store user data only when the backend returned a real identity.
+    // Never persist Unknown / Anonymous placeholders as a local user.
     if (result.user) {
-      if (result.user.firstName && result.user.lastName) {
-        await AsyncStorage.setItem("user", JSON.stringify(result.user));
-        if (__DEV__) console.log("✅ User data saved from backend:", result.user);
-      } else {
-        throw new Error("Incomplete user data from backend");
-      }
+      const identity = assertAccountIdentity(result.user);
+      await AsyncStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...result.user,
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          email: identity.email,
+        })
+      );
+      if (__DEV__) console.log("✅ User data saved from backend:", result.user);
     } else {
+      const identity = assertAccountIdentity(userInfo);
       const userData = {
-        firstName: userInfo.firstName || "Unknown",
-        lastName: userInfo.lastName || "User",
+        firstName: identity.firstName,
+        lastName: identity.lastName,
         avatar: userInfo.avatar || "",
-        email: userInfo.email || "",
+        email: identity.email,
       };
-      if (userData.firstName && userData.firstName !== "Unknown") {
-        await AsyncStorage.setItem("user", JSON.stringify(userData));
-        if (__DEV__) console.log("✅ Fallback user data saved:", userData);
-      } else {
-        throw new Error("Incomplete Clerk user data");
-      }
+      await AsyncStorage.setItem("user", JSON.stringify(userData));
+      if (__DEV__) console.log("✅ User data saved from Clerk identity:", userData);
     }
 
     // Refresh interaction stats after login to restore like/bookmark state

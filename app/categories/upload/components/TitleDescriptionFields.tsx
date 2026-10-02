@@ -1,8 +1,5 @@
 import { TextInput, View } from "react-native";
-import {
-  getInputSize,
-  getResponsiveSpacing,
-} from "../../../../utils/responsive";
+import { getInputSize } from "../../../../utils/responsive";
 import { FIELD_HELP, FieldLabel } from "./FieldLabel";
 import { FieldHelpTip } from "./FieldHelpTip";
 
@@ -18,8 +15,6 @@ type TitleDescriptionFieldsProps = {
 
 export function TitleDescriptionFields({
   title,
-  description,
-  setDescription,
   helpKey,
   openHelp,
   onTitleChange,
@@ -47,6 +42,7 @@ export function TitleDescriptionFields({
         }}
       />
 
+      {/* Description is not required before posting.
       <FieldLabel
         label="DESCRIPTION"
         icon="create-outline"
@@ -70,6 +66,7 @@ export function TitleDescriptionFields({
           fontSize: getInputSize().fontSize,
         }}
       />
+      */}
     </View>
   );
 }

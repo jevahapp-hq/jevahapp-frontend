@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   MediaItem,
@@ -8,6 +8,10 @@ import type {
   Video,
 } from "../types/account.types";
 import { apiClient } from "../utils/dataFetching";
+import {
+  isForgottenMedia,
+  subscribeOwnUploads,
+} from "../../src/shared/media/ownUploads";
 
 type UseAccountContentResult = {
   posts: Post[];
@@ -24,6 +28,11 @@ type UseAccountContentResult = {
 
 export function useAccountContent(): UseAccountContentResult {
   const queryClient = useQueryClient();
+  const [deletedTick, setDeletedTick] = useState(0);
+  useEffect(
+    () => subscribeOwnUploads(() => setDeletedTick((tick) => tick + 1)),
+    []
+  );
   
   // Get userId from React Query cache (from useUserProfile) - read directly from cache
   const userProfile = queryClient.getQueryData(["user-profile"]);
@@ -155,10 +164,41 @@ export function useAccountContent(): UseAccountContentResult {
     refetchOnWindowFocus: false,
   });
 
-  // Extract data from queries
-  const posts = postsQuery.data?.pages.flatMap((page) => page.posts) || [];
-  const media = mediaQuery.data?.pages.flatMap((page) => page.media) || [];
-  const videos = videosQuery.data?.pages.flatMap((page) => page.videos) || [];
+  // Extract data from queries. A deleted file stays off My Content immediately.
+  const posts = useMemo(
+    () =>
+      (postsQuery.data?.pages.flatMap((page) => page.posts) || []).filter(
+        (item) => !isForgottenMedia(item)
+      ),
+    [postsQuery.data, deletedTick]
+  );
+  const media = useMemo(
+    () =>
+      (mediaQuery.data?.pages.flatMap((page) => page.media) || []).filter(
+        (item) => !isForgottenMedia(item)
+      ),
+    [mediaQuery.data, deletedTick]
+  );
+  const videos = useMemo(
+    () =>
+      (
+        videosQuery.data?.pages.flatMap((page) =>
+          (page.videos || []).map((video: any) => ({
+            ...video,
+            _id: video._id || video.id,
+            url: video.url || video.fileUrl || video.playbackUrl || "",
+            thumbnail:
+              video.thumbnail ||
+              video.thumbnailUrl ||
+              video.imageUrl ||
+              video.url ||
+              video.fileUrl ||
+              "",
+          }))
+        ) || []
+      ).filter((item) => !isForgottenMedia(item)),
+    [videosQuery.data, deletedTick]
+  );
   const analytics = analyticsQuery.data || null;
   
   const loading = postsQuery.isLoading || mediaQuery.isLoading || videosQuery.isLoading || analyticsQuery.isLoading;

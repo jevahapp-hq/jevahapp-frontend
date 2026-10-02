@@ -26,6 +26,8 @@ export type LikeHeartButtonProps = {
   showCount?: boolean;
   /** Drop outer margin — used inside CardFooterActions grid */
   compact?: boolean;
+  /** Fire on touch-down so the heart responds as the finger lands. */
+  pressOnTouchDown?: boolean;
 };
 
 export function LikeHeartButton({
@@ -39,6 +41,7 @@ export function LikeHeartButton({
   layout = "horizontal",
   showCount = true,
   compact = false,
+  pressOnTouchDown = true,
 }: LikeHeartButtonProps) {
   const { scale, burst, playLike, playUnlike } = useLikeHeartAnimation();
 
@@ -65,6 +68,7 @@ export function LikeHeartButton({
   return (
     <InstantPressable
       onPress={handlePress}
+      pressOnTouchDown={pressOnTouchDown}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={[
         styles.press,

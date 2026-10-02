@@ -2,6 +2,7 @@
  * Single source of truth for notification list + unread badge.
  * Patches are idempotent so socket echoes and dual subscribers cannot drift counts.
  */
+import { stampJevahAdmin } from "./contentVisibleNotification";
 
 export const NOTIFICATION_LIST_QUERY_KEY = ["notifications"] as const;
 export const NOTIFICATION_STATS_QUERY_KEY = ["notification-stats"] as const;
@@ -93,14 +94,16 @@ export function normalizeNotification<T extends NotificationLike>(raw: T): T {
   const id = notificationId(raw);
   const ts = notificationTimestamp(raw);
   const createdAt = ts ? new Date(ts).toISOString() : raw.createdAt;
-  return withNotificationReadState(
-    {
-      ...raw,
-      _id: id || raw._id,
-      id: raw.id || id,
-      ...(createdAt ? { createdAt } : {}),
-    },
-    isNotificationRead(raw)
+  return stampJevahAdmin(
+    withNotificationReadState(
+      {
+        ...raw,
+        _id: id || raw._id,
+        id: raw.id || id,
+        ...(createdAt ? { createdAt } : {}),
+      },
+      isNotificationRead(raw)
+    )
   );
 }
 

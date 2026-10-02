@@ -6,6 +6,7 @@ import {
   Dimensions,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,6 +29,7 @@ interface BibleFloatingNavProps {
 
 export interface BibleFloatingNavRef {
   toggleHide: () => void;
+  setHidden: (hidden: boolean) => void;
 }
 
 const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(({
@@ -46,20 +48,24 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
   const slideX = useRef(new Animated.Value(0)).current;
   // Arrow removed; we only slide the bar itself
 
-  const toggleHide = () => {
-    const nextHidden = !isHidden;
-    setIsHidden(nextHidden);
+  const setHidden = (hidden: boolean) => {
+    setIsHidden(hidden);
     Animated.timing(slideX, {
-      toValue: nextHidden ? Dimensions.get("window").width : 0,
+      toValue: hidden ? Dimensions.get("window").width : 0,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
+  };
+
+  const toggleHide = () => {
+    setHidden(!isHidden);
   };
 
   // Expose toggleHide via ref
   useImperativeHandle(ref, () => ({
     toggleHide,
-  }));
+    setHidden,
+  }), [isHidden]);
 
   const handleChapterPress = (chapter: BibleChapter) => {
     onChapterSelect(chapter);
@@ -83,19 +89,24 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
         animationType="fade"
         onRequestClose={() => setShowChapterPicker(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowChapterPicker(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowChapterPicker(false)}
+            accessibilityLabel="Close chapter list"
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {book.name} - Select Chapter
               </Text>
-              <TouchableOpacity onPress={() => setShowChapterPicker(false)}>
+              <Pressable
+                onPress={() => setShowChapterPicker(false)}
+                hitSlop={12}
+                accessibilityLabel="Close"
+              >
                 <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView
@@ -138,7 +149,7 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
               ))}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     );
   };
@@ -196,26 +207,40 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
       </View>
     );
 
-    // Use BlurView on native, regular View on web, with inline slide toggle
-    if (Platform.OS !== "web") {
-      return (
-        <View style={styles.outerRow}>
-          <Animated.View style={{ transform: [{ translateX: slideX }] }}>
-            <BlurView intensity={80} tint="light" style={styles.blurContainer}>
-              {floatingContent}
-            </BlurView>
-          </Animated.View>
+    const bar =
+      Platform.OS !== "web" ? (
+        <BlurView intensity={80} tint="light" style={styles.blurContainer}>
+          {floatingContent}
+        </BlurView>
+      ) : (
+        <View style={[styles.blurContainer, styles.webContainer]}>
+          {floatingContent}
         </View>
       );
-    }
 
     return (
       <View style={styles.outerRow}>
-        <Animated.View style={{ transform: [{ translateX: slideX }] }}>
-          <View style={[styles.blurContainer, styles.webContainer]}>
-            {floatingContent}
-          </View>
-        </Animated.View>
+        <View>
+          {!isHidden ? (
+            <Pressable
+              onPress={() => setHidden(true)}
+              hitSlop={10}
+              style={styles.cardClose}
+              accessibilityLabel="Close chapter bar"
+            >
+              <Ionicons name="close" size={16} color="#1F2937" />
+            </Pressable>
+          ) : null}
+          <Animated.View
+            pointerEvents={isHidden ? "none" : "auto"}
+            style={{
+              transform: [{ translateX: slideX }],
+              opacity: Platform.OS === "web" && isHidden ? 0 : 1,
+            }}
+          >
+            {bar}
+          </Animated.View>
+        </View>
       </View>
     );
   };
@@ -270,6 +295,20 @@ const styles = StyleSheet.create({
     height: "100%",
     paddingHorizontal: 8,
     backgroundColor: "rgba(37, 110, 99, 0.15)", // Semi-transparent teal
+  },
+  cardClose: {
+    position: "absolute",
+    top: -10,
+    right: -4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 5,
   },
   inlineSlideToggle: {
     width: 40,
@@ -344,6 +383,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: "85%",
     maxHeight: "70%",
+    zIndex: 2,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,

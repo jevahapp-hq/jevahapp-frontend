@@ -4,8 +4,12 @@
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
+import { contentRouteFromUrl } from "../../src/shared/share/contentShare";
 
 function pathFromUrl(url: string): string | null {
+  const contentRoute = contentRouteFromUrl(url);
+  if (contentRoute) return contentRoute;
+
   try {
     const parsed = Linking.parse(url);
     const path = (parsed.path || "").replace(/^\/+/, "");

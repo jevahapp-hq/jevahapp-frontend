@@ -40,6 +40,7 @@ export type NotificationType =
   | "bookmark" // Someone saved your content
   | "milestone" // Achievement unlocked
   | "public_activity" // Public activity from followed users
+  | "content_approved" // Your approved post is now visible
   | "system" // System notifications
   | "security" // Security alerts
   | "live_stream" // Live stream notifications
@@ -356,6 +357,7 @@ class NotificationAPIService {
       bookmark: "🔖",
       milestone: "🎉",
       public_activity: "📢",
+      content_approved: "✅",
       system: "⚙️",
       security: "🔒",
       live_stream: "📺",
@@ -374,6 +376,7 @@ class NotificationAPIService {
       bookmark: "#ff5722",
       milestone: "#ffeb3b",
       public_activity: "#00bcd4",
+      content_approved: "#256E63",
       system: "#9e9e9e",
       security: "#f44336",
       live_stream: "#e91e63",

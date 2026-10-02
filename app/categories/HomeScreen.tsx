@@ -1,8 +1,9 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import { InteractionManager, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
+import { dismissReadingNarration } from "../../src/shared/audio/dismissReadingNarration";
 import {
   releaseMiniPlayer,
   setMiniPlayerSuppression,
@@ -64,6 +65,7 @@ export default function HomeScreen() {
     const next = tab as MainShellTab;
     setSelectedTab(next);
     setVisitedTabs((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
+    if (next !== "Bible") dismissReadingNarration();
     setMiniPlayerSuppression("bible-tab", next === "Bible");
   }, []);
 
@@ -72,10 +74,10 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = requestIdleCallback(() => {
       prefetchHomeTabModules();
     });
-    return () => task.cancel();
+    return () => cancelIdleCallback(task);
   }, []);
 
   useEffect(() => {

@@ -1,8 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import { getTimeAgo } from "../../../src/shared/utils/contentHelpers";
 import { getUserAvatarFromContent } from "../../utils/userValidation";
+
+function truncateWords(text: string, maxWords: number): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
 
 interface ReelsSpeakerInfoProps {
   enrichedVideoData: any;
@@ -61,13 +67,31 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
 
   const title =
     typeof enrichedVideoData?.title === "string"
-      ? enrichedVideoData.title.trim()
+      ? truncateWords(enrichedVideoData.title.trim(), 7)
       : "";
-  const description =
+  const fullDescription =
     typeof enrichedVideoData?.description === "string"
       ? enrichedVideoData.description.trim()
       : "";
+  const previewDescription = fullDescription
+    ? truncateWords(fullDescription, 10)
+    : "";
+  const descriptionIsLong = previewDescription !== fullDescription;
+  const videoId = enrichedVideoData?._id || enrichedVideoData?.id || "";
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [videoId]);
+  const description = descriptionExpanded ? fullDescription : previewDescription;
 
+  const profileRowHeight = getResponsiveSize(36, 40, 44);
+  const actionColumnWidth = getResponsiveSize(44, 48, 52);
+  const titleSlotHeight = getResponsiveFontSize(13, 14, 15) * 2 + 4;
+  const descriptionSlotHeight = getResponsiveFontSize(16, 17, 18) * 2;
+  const titleGap = getResponsiveSpacing(8, 10, 12);
+  const descriptionGap = getResponsiveSpacing(4, 6, 8);
+  const captionHeight =
+    profileRowHeight + titleGap + titleSlotHeight + descriptionGap + descriptionSlotHeight;
   const textShadow = {
     textShadowColor: "rgba(0, 0, 0, 0.55)",
     textShadowOffset: { width: 0, height: 1 },
@@ -78,21 +102,22 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
     <View
       style={{
         position: "absolute",
-        bottom: getResponsiveSpacing(118, 132, 148),
+        bottom: getResponsiveSpacing(102, 114, 128),
         left: getResponsiveSpacing(12, 16, 20),
-        right: getResponsiveSpacing(12, 16, 20),
-        zIndex: 20,
+        right: getResponsiveSpacing(8, 10, 12),
+        height: captionHeight,
+        zIndex: Platform.OS === "android" ? 40 : 20,
+        elevation: Platform.OS === "android" ? 32 : 0,
       }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View style={{ marginRight: actionColumnWidth }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              minHeight: profileRowHeight,
+            }}
+          >
             <TouchableOpacity
               style={{
                 width: getResponsiveSize(28, 32, 36),
@@ -147,25 +172,31 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
             </View>
           </View>
 
-          {title ? (
-            <Text
-              style={{
-                marginTop: getResponsiveSpacing(8, 10, 12),
-                fontSize: getResponsiveFontSize(13, 14, 15),
-                color: "#FFFFFF",
-                fontFamily: "PlusJakartaSans-Bold",
-                ...textShadow,
-              }}
-              numberOfLines={2}
-            >
-              {title}
-            </Text>
-          ) : null}
+          <View style={{ height: titleSlotHeight, marginTop: titleGap }}>
+            {title ? (
+              <Text
+                style={{
+                  fontSize: getResponsiveFontSize(13, 14, 15),
+                  color: "#FFFFFF",
+                  fontFamily: "PlusJakartaSans-Bold",
+                  ...textShadow,
+                }}
+              >
+                {title}
+              </Text>
+            ) : null}
+          </View>
 
+          <View
+            style={{
+              height: descriptionSlotHeight,
+              marginTop: descriptionGap,
+              overflow: "visible",
+            }}
+          >
           {description ? (
             <View
               style={{
-                marginTop: getResponsiveSpacing(4, 6, 8),
                 flexDirection: "row",
                 alignItems: "flex-start",
               }}
@@ -179,9 +210,21 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
                   fontFamily: "PlusJakartaSans",
                   ...textShadow,
                 }}
-                numberOfLines={3}
               >
-                {description}
+                {descriptionExpanded ? null : description}
+                {descriptionIsLong && !descriptionExpanded ? (
+                  <Text
+                    onPress={() => setDescriptionExpanded(true)}
+                    style={{
+                      fontFamily: "PlusJakartaSans-SemiBold",
+                      color: "#FFFFFF",
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show full description"
+                  >
+                    {" more"}
+                  </Text>
+                ) : null}
               </Text>
               {canEditDescription ? (
                 <TouchableOpacity
@@ -233,13 +276,56 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
               </Text>
             </TouchableOpacity>
           ) : null}
-        </View>
+          {descriptionExpanded ? (
+            <Text
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                fontSize: getResponsiveFontSize(11, 12, 13),
+                lineHeight: getResponsiveFontSize(16, 17, 18),
+                color: "rgba(255,255,255,0.92)",
+                fontFamily: "PlusJakartaSans",
+                ...textShadow,
+              }}
+            >
+              {fullDescription}
+              <Text
+                onPress={() => setDescriptionExpanded(false)}
+                style={{
+                  fontFamily: "PlusJakartaSans-SemiBold",
+                  color: "#FFFFFF",
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Show less description"
+              >
+                {"  less"}
+              </Text>
+            </Text>
+          ) : null}
+          </View>
+      </View>
 
-        <TouchableOpacity
-          onPress={() => {
-            triggerHapticFeedback();
-            onMenuToggle();
-          }}
+      <TouchableOpacity
+        onPress={() => {
+          triggerHapticFeedback();
+          onMenuToggle();
+        }}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: actionColumnWidth,
+          height: profileRowHeight,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        activeOpacity={0.7}
+        accessibilityLabel="More options menu"
+        accessibilityRole="button"
+      >
+        <View
           style={{
             width: getResponsiveSize(28, 32, 36),
             height: getResponsiveSize(28, 32, 36),
@@ -253,18 +339,14 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
             shadowRadius: 4,
             elevation: 3,
           }}
-          activeOpacity={0.7}
-          accessibilityLabel="More options menu"
-          accessibilityRole="button"
         >
           <Ionicons
             name="ellipsis-vertical"
             size={getResponsiveSize(14, 16, 18)}
             color="#3A3E50"
           />
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 };
-

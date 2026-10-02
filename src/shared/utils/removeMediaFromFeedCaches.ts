@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useContentCacheStore } from "@/store/useContentCacheStore";
+import { isForgottenMedia } from "../media/ownUploads";
 
 type MediaLike = { _id?: string; id?: string; media?: unknown[] };
 
@@ -9,7 +10,9 @@ function itemId(item: any): string {
 
 function filterMediaList<T extends MediaLike>(list: T[] | undefined, mediaId: string): T[] {
   if (!Array.isArray(list)) return [];
-  return list.filter((item) => itemId(item) !== mediaId);
+  return list.filter(
+    (item) => itemId(item) !== mediaId && !isForgottenMedia(item)
+  );
 }
 
 /**

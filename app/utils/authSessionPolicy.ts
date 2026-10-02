@@ -154,27 +154,12 @@ export function classifySessionFailure(opts: {
     return "keep_session";
   }
 
-  // Refresh with empty body + 401 → classic expired JWT (IG hard logout)
-  if (context === "refresh" && !text.trim()) {
-    return "end_session";
-  }
-
   if (isHardAuthFailureMessage(text)) {
     return "end_session";
   }
 
-  // Ambiguous 401 with a token: keep session on request probes;
-  // on refresh, prefer ending only if we know it's hard — else keep (safer UX)
-  if (context === "refresh") {
-    // Unknown refresh 401 with some body that isn't hard → keep (outage-shaped)
-    if (text.trim() && !isHardAuthFailureMessage(text)) {
-      return "keep_session";
-    }
-    // Empty already handled; leftover unknown → end (refresh is the source of truth)
-    return "end_session";
-  }
-
-  // Socket / request ambiguous 401 → keep; next authenticated call + refresh decides
+  // Empty or vague 401s are not proof the account is dead. A killed Android
+  // process and a refresh with no body were clearing the session.
   return "keep_session";
 }
 

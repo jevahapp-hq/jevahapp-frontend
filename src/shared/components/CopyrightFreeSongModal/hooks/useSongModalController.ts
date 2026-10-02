@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Dimensions, InteractionManager, Platform, Share, StatusBar, View } from "react-native";
+import { Alert, Dimensions, Platform, Share, StatusBar, View } from "react-native";
 import {
   initialWindowMetrics as safeAreaInitialMetrics,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { isCopyrightFreeSong } from "@/shared/audio";
+import { buildContentShare } from "@/shared/share/contentShare";
 import { resolveAlbumArtSource } from "@/shared/brand/albumArt";
 import copyrightFreeMusicAPI from "@/app/services/copyrightFreeMusicAPI";
 import { playlistAPI } from "@/app/utils/playlistAPI";
@@ -217,7 +218,7 @@ export function useSongModalController({
   const prevShowPlaylistModalRef = useRef(false);
   useEffect(() => {
     if (showPlaylistModal && !prevShowPlaylistModalRef.current) {
-      InteractionManager.runAfterInteractions(() => loadPlaylistsFromBackend());
+      requestIdleCallback(() => loadPlaylistsFromBackend());
     }
     prevShowPlaylistModalRef.current = showPlaylistModal;
   }, [showPlaylistModal, loadPlaylistsFromBackend]);
@@ -390,12 +391,20 @@ export function useSongModalController({
         }
       }
 
-      const result = await Share.share({
+      const page = buildContentShare({
+        id: songId,
         title: song.title,
-        message: shareUrl
-          ? `Listen to ${song.title} on Jevah\n${shareUrl}`
-          : `Listen to ${song.title} on Jevah`,
-        url: shareUrl || song.audioUrl || song.fileUrl,
+        description: song.description,
+      });
+      const url = shareUrl || page.url;
+      const message =
+        shareUrl && page.url
+          ? page.message.replace(page.url, shareUrl)
+          : page.message;
+      const result = await Share.share({
+        title: page.title,
+        message,
+        ...(url ? { url } : {}),
       });
       if (result.action === Share.sharedAction) {
         if (!isCopyrightFreeSong(song)) {

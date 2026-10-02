@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { openContentVisibleNotification } from "@/shared/notifications/openContentVisibleNotification";
 import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
@@ -17,6 +18,7 @@ import { SafeImage } from "../components/SafeImage";
 import { useNotifications } from "../hooks/useNotifications";
 import { notificationAPIService } from "../services/NotificationAPIService";
 import { isNotificationRead, groupNotificationsByRecency } from "@/shared/notifications/notificationCache";
+import { notificationActorLabel } from "@/shared/notifications/contentVisibleNotification";
 
 export default function NotificationsScreen() {
   const {
@@ -31,6 +33,7 @@ export default function NotificationsScreen() {
     hasMore,
   } = useNotifications();
 
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -72,10 +75,12 @@ export default function NotificationsScreen() {
           await markAsRead(notification._id || notification.id);
         } catch {
           Alert.alert("Error", "Couldn't update this notification. Please try again.");
+          return;
         }
       }
+      await openContentVisibleNotification(notification, router);
     },
-    [markAsRead]
+    [markAsRead, router]
   );
 
   // Utility functions
@@ -125,9 +130,7 @@ export default function NotificationsScreen() {
               justifyContent: 'center',
               alignItems: 'center',
             }}
-            fallbackText={
-              notification.metadata?.actorName?.[0]?.toUpperCase() || "U"
-            }
+            fallbackText={notificationActorLabel(notification)[0]?.toUpperCase() || "J"}
             showFallback={true}
           />
           {!isNotificationRead(notification) && (
@@ -152,7 +155,7 @@ export default function NotificationsScreen() {
           {/* Name and Time Row */}
           <View className="flex-row items-center justify-between mb-1">
             <Text className="font-jakarta-semibold text-[#1D2939] text-[15px]">
-              {notification.metadata?.actorName || "Someone"}
+              {notificationActorLabel(notification)}
             </Text>
             <Text className="text-[#98A2B3] font-jakarta text-[12px]">
               {formatTimeAgo(notification.createdAt)}
@@ -165,6 +168,11 @@ export default function NotificationsScreen() {
           </Text>
 
           {/* Content Preview if available */}
+          {notification.metadata?.contentTitle && !notification.metadata?.thumbnailUrl && (
+            <Text className="font-jakarta-semibold text-[#1D2939] text-[13px]" numberOfLines={1}>
+              {notification.metadata.contentTitle}
+            </Text>
+          )}
           {notification.metadata?.thumbnailUrl && (
             <View className="mt-2 flex-row items-center bg-[#F9FAFB] rounded-lg p-2 border border-[#E4E7EC]">
               <Image

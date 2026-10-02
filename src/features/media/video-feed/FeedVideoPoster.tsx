@@ -99,6 +99,7 @@ export function FeedVideoStill({
         style={{ width: "100%", height }}
         contentFit={contentFit}
         cachePolicy={getLiteImageCachePolicy()}
+        recyclingKey={url || "feed-frame"}
         priority="high"
       />
     );
@@ -115,8 +116,9 @@ export function FeedVideoStill({
 }
 
 /**
- * APK card: thumbnail paints first at full width. Cover-fill is clipped to
- * the 400px box. Fullscreen callers should use FittedMediaImage instead.
+ * APK card: thumbnail paints first at full width. Contain-fit keeps the
+ * 400px box and shows the whole frame. Fullscreen callers should use
+ * FittedMediaImage instead.
  */
 export function FeedVideoPoster({
   item,
@@ -138,7 +140,14 @@ export function FeedVideoPoster({
   const cachePolicy = getLiteImageCachePolicy();
 
   return (
-    <View style={[styles.wrap, { height }]} collapsable={false}>
+    <View
+      style={[
+        styles.wrap,
+        { height },
+        contentFit === "contain" ? styles.containWrap : null,
+      ]}
+      collapsable={false}
+    >
       {uri ? (
         <Image
           source={{ uri: raw || uri }}
@@ -180,6 +189,9 @@ const styles = StyleSheet.create({
     width: "100%",
     overflow: "hidden",
     backgroundColor: "#1A0E0A",
+  },
+  containWrap: {
+    backgroundColor: "transparent",
   },
   img: {
     ...StyleSheet.absoluteFillObject,

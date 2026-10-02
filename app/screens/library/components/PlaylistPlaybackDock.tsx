@@ -9,6 +9,7 @@ import { PlayerTransport } from "@/components/CopyrightFreeSongModal/components/
 import { SongModalOptions } from "@/components/CopyrightFreeSongModal/SongModalOptions";
 import { useSongInteractions } from "@/components/CopyrightFreeSongModal/useSongInteractions";
 import type { Playlist, PlaylistSong } from "@/store/usePlaylistStore";
+import { buildContentShareFromItem } from "@/shared/share/contentShare";
 
 function formatClock(ms: number) {
   const seconds = Math.floor(Math.max(0, ms) / 1000);
@@ -51,12 +52,12 @@ export function usePlaylistNowPlaying(playlist: Playlist | null) {
 
   const handleShare = useCallback(async () => {
     if (!activeSong) return;
-    const title = activeSong.title || "Jevah";
-    await Share.share({
-      title,
-      message: `Listen to ${title} on Jevah`,
-      url: String(activeSong.audioUrl || ""),
-    }).catch(() => {});
+    await Share.share(
+      buildContentShareFromItem(
+        activeSong,
+        activeSong.mediaId || songIdOf(activeSong)
+      )
+    ).catch(() => {});
   }, [activeSong]);
 
   const handleRepeatCycle = useCallback(() => {

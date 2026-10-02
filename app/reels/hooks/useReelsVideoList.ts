@@ -1,5 +1,13 @@
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
+import {
+  isForgottenMedia,
+  subscribeOwnUploads,
+} from "../../../src/shared/media/ownUploads";
+
+function keepVisibleReel(item: unknown): boolean {
+  return !isForgottenMedia(item);
+}
 
 export interface UseReelsVideoListOptions {
   reelsStoreVideoList: any[];
@@ -15,6 +23,9 @@ export function useReelsVideoList({
   const videoListProcessedRef = useRef(false);
   const lastVideoListRef = useRef<string | undefined>(undefined);
   const lastListKeyRef = useRef<string>("");
+  const [forgottenTick, setForgottenTick] = useState(0);
+
+  useEffect(() => subscribeOwnUploads(() => setForgottenTick((tick) => tick + 1)), []);
 
   const parsedVideoList = useMemo(() => {
     let rawList: any[] = [];
@@ -33,11 +44,13 @@ export function useReelsVideoList({
       return [];
     }
 
+    rawList = rawList.filter(keepVisibleReel);
+
     if (rawList.length > 0) {
       return UserProfileCache.enrichContentArray(rawList);
     }
     return rawList;
-  }, [reelsStoreVideoList, videoListParam]);
+  }, [reelsStoreVideoList, videoListParam, forgottenTick]);
 
   useEffect(() => {
     if (videoListParam === lastVideoListRef.current && reelsStoreVideoList.length > 0) {
@@ -46,7 +59,8 @@ export function useReelsVideoList({
 
     if (reelsStoreVideoList.length === 0 && videoListParam) {
       try {
-        const parsed = JSON.parse(videoListParam);
+        const parsed = JSON.parse(videoListParam).filter(keepVisibleReel);
+        if (!parsed.length) return;
         const enrichedList = UserProfileCache.enrichContentArray(parsed);
         reelsStoreSetVideoList(enrichedList);
         lastVideoListRef.current = videoListParam;
@@ -109,7 +123,9 @@ export function useReelsVideoList({
 
     if (!needsEnrichment) return;
     UserProfileCache.enrichContentArrayBatch(rawList).then((enriched) => {
-      reelsStoreSetVideoList(enriched);
+      reelsStoreSetVideoList(
+        (enriched || []).filter(keepVisibleReel)
+      );
     });
   }, [reelsStoreVideoList.length, videoListParam]);
 

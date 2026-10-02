@@ -138,9 +138,16 @@ export async function persistUploadedMedia(params: {
   selectedType?: string;
 }): Promise<MediaItem> {
   const { uploaded, file } = params;
+  const remoteUrl = String(uploaded.fileUrl || uploaded.playbackUrl || "").trim();
+  const playable = remoteUrl || String(file.uri || "").trim();
+  const uploadedForFeed = {
+    ...uploaded,
+    fileUrl: playable,
+    playbackUrl: uploaded.playbackUrl || playable || undefined,
+  };
   const author = await sessionAuthorStamp();
   const feedItem = stampPayloadAuthor({
-    ...buildFeedMediaItem(params),
+    ...buildFeedMediaItem({ ...params, uploaded: uploadedForFeed }),
     ...author,
   }) as MediaItem;
   const now = new Date();
@@ -149,12 +156,12 @@ export async function persistUploadedMedia(params: {
     _id: uploaded._id,
     title: uploaded.title,
     description: uploaded.description || "",
-    uri: uploaded.fileUrl,
+    uri: playable,
     category: uploaded.genre ? [uploaded.genre] : [],
     type: feedItem.contentType,
     contentType: feedItem.contentType,
-    fileUrl: uploaded.fileUrl,
-    playbackUrl: uploaded.playbackUrl,
+    fileUrl: playable,
+    playbackUrl: uploaded.playbackUrl || playable,
     hlsUrl: uploaded.hlsUrl,
     fileMimeType: uploaded.fileMimeType || file.mimeType,
     thumbnailUrl: uploaded.thumbnailUrl || uploaded.imageUrl || undefined,

@@ -89,6 +89,7 @@ export function MediaCardModals({
       <DeleteMediaConfirmation
         visible={showDeleteModal}
         mediaId={item._id || ""}
+        mediaItem={item}
         mediaTitle={item.title || "this media"}
         onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}

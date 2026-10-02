@@ -27,6 +27,7 @@ import {
 import Header from "../components/Header";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import { useAuth } from "../hooks/useAuth";
+import { setEbookFeedActive } from "../../src/shared/layout/createFabGate";
 import { rememberHomeFeedCategory, readHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
 
 const Music = lazy(() => import("./music"));
@@ -125,6 +126,12 @@ export default function HomeTabContent({
     seededCategoryRef.current = true;
     rememberHomeFeedCategory(mapCategoryToContentType(initialCategory));
   }
+  useEffect(() => {
+    const onEbookPage = isTabActive && selectedCategory === "E-BOOKS";
+    setEbookFeedActive(onEbookPage);
+    return () => setEbookFeedActive(false);
+  }, [isTabActive, selectedCategory]);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const chipLayouts = useRef<Record<string, { x: number; width: number }>>(
     {}

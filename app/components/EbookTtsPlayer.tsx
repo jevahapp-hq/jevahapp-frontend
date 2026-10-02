@@ -127,7 +127,7 @@ export default function EbookTtsPlayer({
     return () => {
       const store = useGlobalAudioPlayerStore.getState();
       if (store.currentTrack?.id === ttsId) {
-        store.pause().catch(() => {});
+        void store.clear();
       }
     };
   }, [ttsId]);

@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
     Dimensions,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     Text,
@@ -248,5 +248,4 @@ export default function CreateGroupScreen() {
     </Animated.View>
   );
 }
-
 

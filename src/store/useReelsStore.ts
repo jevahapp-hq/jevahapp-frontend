@@ -57,7 +57,11 @@ export const useReelsStore = create<ReelsState>((set, get) => ({
   setVideoList: (videos) => set({ videoList: videos }),
   removeVideoById: (id) =>
     set((state) => {
-      const next = state.videoList.filter((v) => String(v._id) !== String(id));
+      const target = String(id);
+      const next = state.videoList.filter((video) => {
+        const row = video as VideoItem & { id?: string };
+        return String(row._id) !== target && String(row.id || "") !== target;
+      });
       const currentIndex = Math.min(
         state.currentIndex,
         Math.max(0, next.length - 1)

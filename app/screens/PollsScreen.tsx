@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -8,7 +9,6 @@ import {
   Dimensions,
   FlatList,
   Modal,
-  SafeAreaView,
   StatusBar,
   Text,
   TouchableOpacity,

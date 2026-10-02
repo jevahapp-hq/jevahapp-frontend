@@ -141,6 +141,12 @@ function patchActive(
   return patchNotificationQueries(activeClient, reducer);
 }
 
+export function patchActiveNotification(
+  reducer: (snapshot: NotificationSnapshot) => PatchResult
+): boolean {
+  return patchActive(reducer);
+}
+
 async function bindSocket(): Promise<void> {
   try {
     const socket = await acquireNotificationSocket();

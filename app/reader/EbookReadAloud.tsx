@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,20 +10,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { TapGestureHandler } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTextToSpeech } from "../hooks/useTextToSpeech";
-import { pausePlaybackSession } from "../../src/shared/audio";
+import BibleFontSheet from "../components/bible/BibleFontSheet";
+import BibleVoiceSheet from "../components/bible/BibleVoiceSheet";
+import { BIBLE_NARRATORS } from "../services/bibleNarrationApi";
+import { useBibleReadingStyle } from "../utils/bibleReadingStyle";
 import {
   EbookChapter,
-  EbookWordPosition,
-  buildWordPositions,
   firstReadableChapter,
-  joinWords,
   nextReadableChapter,
   prevReadableChapter,
   readableChapterAtOrAfter,
   splitWords,
 } from "./pdfText/buildEbookChapters";
+import { useEbookNarration } from "./useEbookNarration";
 
 type Props = {
   title?: string;
@@ -50,194 +51,60 @@ export default function EbookReadAloud({
   startChapterNumber,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const reading = useBibleReadingStyle();
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [fontOpen, setFontOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const chromeTapAt = useRef(0);
   const requestedStart = Math.max(1, startChapterNumber || 1);
   const first = firstReadableChapter(chapters);
   const [chapterNumber, setChapterNumber] = useState(requestedStart);
-  const [currentWordPosition, setCurrentWordPosition] =
-    useState<EbookWordPosition | null>(null);
-  const [userPaused, setUserPaused] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  const playbackOffsetRef = useRef(0);
-  const resumeWordIndexRef = useRef(0);
   const autoPlayedRef = useRef(false);
   const pendingPlayRef = useRef(false);
-  const continueAfterDoneRef = useRef(true);
-  const utteranceIdRef = useRef(0);
-  const userPausedRef = useRef(false);
 
   const chapter = chapters.find((c) => c.chapterNumber === chapterNumber);
   const blocks = chapter?.blocks ?? [];
-  const allWords = useMemo(() => buildWordPositions(blocks), [blocks]);
-  const allWordsRef = useRef(allWords);
-  allWordsRef.current = allWords;
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
   const chapterNumberRef = useRef(chapterNumber);
   chapterNumberRef.current = chapterNumber;
-  const currentWordPositionRef = useRef(currentWordPosition);
-  currentWordPositionRef.current = currentWordPosition;
 
   const applyChapter = useCallback(
     (next: number, play: boolean) => {
-      setCurrentWordPosition(null);
-      playbackOffsetRef.current = 0;
-      resumeWordIndexRef.current = 0;
       setChapterNumber(next);
       onChapterChange?.(next);
       pendingPlayRef.current = play;
-      if (!play) setUserPaused(false);
     },
     [onChapterChange]
   );
 
-  const progressRef = useRef((_p: { currentWord: number }) => {});
-  const doneRef = useRef(() => {});
-  const stoppedRef = useRef(() => {});
-
-  progressRef.current = ({ currentWord }) => {
-    if (userPausedRef.current) return;
-    const words = allWordsRef.current;
-    const index = currentWord - 1 + playbackOffsetRef.current;
-    if (currentWord > 0 && index >= 0 && index < words.length) {
-      const wordPos = words[index];
-      resumeWordIndexRef.current = index;
-      setCurrentWordPosition(wordPos);
-      if (wordPos) {
-        flatListRef.current?.scrollToIndex({
-          index: wordPos.blockIndex,
-          animated: true,
-          viewPosition: 0.3,
-        });
-      }
-    }
-  };
-
-  const {
-    isSpeaking,
-    speak,
-    stop,
-    setRate,
-    rate,
-  } = useTextToSpeech({
-    onStart: () => {
-      void pausePlaybackSession();
+  const narration = useEbookNarration({
+    blocks,
+    chapterNumber,
+    onChapterEnded: () => {
+      const nxt = nextReadableChapter(
+        chaptersRef.current,
+        chapterNumberRef.current
+      );
+      if (!nxt) return;
+      applyChapter(nxt.chapterNumber, true);
     },
-    onDone: () => doneRef.current(),
-    onStopped: () => stoppedRef.current(),
-    onProgress: (p) => progressRef.current(p),
   });
 
-  const speakRef = useRef(speak);
-  speakRef.current = speak;
-  const stopRef = useRef(stop);
-  stopRef.current = stop;
-  const isSpeakingRef = useRef(isSpeaking);
-  isSpeakingRef.current = isSpeaking;
+  const listening = narration.isPlaying;
+  const playFromBlockRef = useRef(narration.playFromBlock);
+  playFromBlockRef.current = narration.playFromBlock;
 
   useEffect(() => {
-    userPausedRef.current = userPaused;
-  }, [userPaused]);
+    if (narration.activeBlockIndex == null) return;
+    flatListRef.current?.scrollToIndex({
+      index: narration.activeBlockIndex,
+      animated: false,
+      viewPosition: 0.28,
+    });
+  }, [narration.activeBlockIndex]);
 
-  doneRef.current = () => {
-    if (userPausedRef.current) return;
-    setCurrentWordPosition(null);
-    if (!continueAfterDoneRef.current) return;
-    const finishedId = utteranceIdRef.current;
-    const nxt = nextReadableChapter(
-      chaptersRef.current,
-      chapterNumberRef.current
-    );
-    if (!nxt) return;
-    setTimeout(() => {
-      if (utteranceIdRef.current !== finishedId) return;
-      if (!continueAfterDoneRef.current) return;
-      if (userPausedRef.current) return;
-      applyChapter(nxt.chapterNumber, true);
-    }, 250);
-  };
-
-  stoppedRef.current = () => {
-    if (userPausedRef.current) return;
-    setCurrentWordPosition(null);
-  };
-
-  useEffect(() => {
-    const current = chapters.find((c) => c.chapterNumber === chapterNumber);
-    if (current && !current.isEmpty) return;
-    const stillWaitingForPage =
-      status === "preparing" ||
-      status === "extracting" ||
-      status === "idle";
-    if (stillWaitingForPage && extractedPages < chapterNumber) return;
-    const fallback = readableChapterAtOrAfter(chapters, chapterNumber) || first;
-    if (fallback && fallback.chapterNumber !== chapterNumber) {
-      setChapterNumber(fallback.chapterNumber);
-      onChapterChange?.(fallback.chapterNumber);
-    }
-  }, [
-    chapters,
-    chapterNumber,
-    first,
-    onChapterChange,
-    status,
-    extractedPages,
-  ]);
-
-  useEffect(() => {
-    onChapterChange?.(chapterNumber);
-  }, [chapterNumber, onChapterChange]);
-
-  useEffect(() => {
-    return () => {
-      utteranceIdRef.current += 1;
-      continueAfterDoneRef.current = false;
-      void stopRef.current();
-    };
-  }, []);
-
-  const rememberResumeIndex = useCallback(() => {
-    const words = allWordsRef.current;
-    const pos = currentWordPositionRef.current;
-    if (!pos) return;
-    const idx = words.findIndex(
-      (w) => w.blockIndex === pos.blockIndex && w.wordIndex === pos.wordIndex
-    );
-    if (idx >= 0) resumeWordIndexRef.current = idx;
-  }, []);
-
-  const startReadingFromWord = useCallback(async (wordIndex: number) => {
-    const words = allWordsRef.current;
-    if (words.length === 0) return;
-    const start = Math.max(0, Math.min(wordIndex, words.length - 1));
-    playbackOffsetRef.current = start;
-    resumeWordIndexRef.current = start;
-    const text = joinWords(words.slice(start));
-    if (!text) return;
-    utteranceIdRef.current += 1;
-    continueAfterDoneRef.current = true;
-    setUserPaused(false);
-    void pausePlaybackSession();
-    await speakRef.current(text);
-  }, []);
-
-  const startChapter = useCallback(async () => {
-    await startReadingFromWord(0);
-  }, [startReadingFromWord]);
-
-  const pauseReading = useCallback(async () => {
-    rememberResumeIndex();
-    userPausedRef.current = true;
-    setUserPaused(true);
-    continueAfterDoneRef.current = false;
-    utteranceIdRef.current += 1;
-    await stopRef.current();
-  }, [rememberResumeIndex]);
-
-  const resumeReading = useCallback(async () => {
-    await startReadingFromWord(resumeWordIndexRef.current);
-  }, [startReadingFromWord]);
-
-  // Auto-play from the PDF page the user was on, once that chapter's text is in.
   useEffect(() => {
     if (autoPlayedRef.current) return;
     const ready =
@@ -250,111 +117,90 @@ export default function EbookReadAloud({
       setChapterNumber(ready.chapterNumber);
       return;
     }
-    if (allWords.length === 0) return;
-    autoPlayedRef.current = true;
-    const t = setTimeout(() => {
-      void startChapter();
+    if (blocks.length === 0) return;
+    const timer = setTimeout(() => {
+      autoPlayedRef.current = true;
+      void playFromBlockRef.current(0);
     }, 400);
-    return () => clearTimeout(t);
-  }, [
-    chapters,
-    requestedStart,
-    chapterNumber,
-    allWords.length,
-    startChapter,
-    status,
-  ]);
+    return () => clearTimeout(timer);
+  }, [blocks.length, chapterNumber, chapters, requestedStart, status]);
 
-  // Play after next/prev chapter once that chapter's word map is ready.
   useEffect(() => {
     if (!pendingPlayRef.current) return;
-    if (allWords.length === 0) return;
+    if (blocks.length === 0) return;
     pendingPlayRef.current = false;
-    const t = setTimeout(() => {
-      void startChapter();
+    const timer = setTimeout(() => {
+      void playFromBlockRef.current(0);
     }, 200);
-    return () => clearTimeout(t);
-  }, [allWords, chapterNumber, startChapter]);
+    return () => clearTimeout(timer);
+  }, [blocks.length, chapterNumber]);
 
-  const listening = isSpeaking && !userPaused;
+  const handleSelectVoice = (id: string) => {
+    narration.setReader(id);
+  };
+
+  const toggleChrome = () => {
+    const now = Date.now();
+    if (now - chromeTapAt.current < 700) return;
+    chromeTapAt.current = now;
+    setControlsVisible((visible) => !visible);
+  };
 
   const handlePlayPause = async () => {
-    if (listening) {
-      await pauseReading();
-      return;
-    }
-    if (userPaused) {
-      await resumeReading();
-      return;
-    }
-    if (allWords.length === 0) return;
-    await startChapter();
+    if (narration.preparing || blocks.length === 0) return;
+    await narration.togglePlayback();
   };
 
   const handleStop = async () => {
-    utteranceIdRef.current += 1;
-    continueAfterDoneRef.current = false;
-    userPausedRef.current = false;
-    setUserPaused(false);
-    playbackOffsetRef.current = 0;
-    resumeWordIndexRef.current = 0;
-    setCurrentWordPosition(null);
-    await stop();
+    await narration.stop();
   };
 
   const goPrev = () => {
     const prev = prevReadableChapter(chapters, chapterNumber);
     if (!prev) return;
-    utteranceIdRef.current += 1;
-    continueAfterDoneRef.current = false;
-    void stop();
+    void narration.stop();
     applyChapter(prev.chapterNumber, listening);
   };
 
   const goNext = () => {
     const nxt = nextReadableChapter(chapters, chapterNumber);
     if (!nxt) return;
-    utteranceIdRef.current += 1;
-    continueAfterDoneRef.current = false;
-    void stop();
+    void narration.stop();
     applyChapter(nxt.chapterNumber, listening);
   };
 
-  const onBlockPress = (index: number) => {
-    if (listening) {
-      void pauseReading();
-      return;
-    }
-    // Silent reading: tapping a paragraph does not restart audio.
+  const onBlockPress = (_index: number) => {
+    if (Date.now() - chromeTapAt.current < 500) return;
   };
 
   const renderBlock = ({ item, index }: { item: string; index: number }) => {
     const words = splitWords(item);
-    const isCurrent = currentWordPosition?.blockIndex === index;
+    const isCurrent = narration.activeBlockIndex === index;
+    const verseType = {
+      fontFamily: reading.fontFamily,
+      fontSize: reading.fontSize,
+      lineHeight: reading.lineHeight,
+    };
     return (
       <TouchableOpacity
-        style={styles.blockRow}
+        style={[styles.blockRow, isCurrent && styles.blockActive]}
         activeOpacity={listening ? 0.7 : 1}
         onPress={() => onBlockPress(index)}
         onLongPress={() => {
-          const found = allWords.findIndex((w) => w.blockIndex === index);
-          void startReadingFromWord(found >= 0 ? found : 0);
+          if (Date.now() - chromeTapAt.current < 700) return;
+          void narration.playFromBlock(index);
         }}
       >
         <Text style={styles.blockNumber}>{index + 1}</Text>
         <View style={styles.blockTextWrap}>
-          {words.map((word, wordIndex) => {
-            const highlighted =
-              isCurrent && currentWordPosition?.wordIndex === wordIndex;
-            return (
+          {words.map((word, wordIndex) => (
               <Text
                 key={`${index}-${wordIndex}`}
-                style={[styles.word, highlighted && styles.highlightedWord]}
+                style={[styles.word, verseType]}
               >
                 {word}{" "}
               </Text>
-            );
-          })}
+            ))}
         </View>
       </TouchableOpacity>
     );
@@ -421,47 +267,24 @@ export default function EbookReadAloud({
 
   return (
     <View style={styles.container}>
-      <View style={styles.floatingPlayContainer} pointerEvents="box-none">
-        {Platform.OS !== "web" ? (
-          <BlurView intensity={80} tint="light" style={styles.glassBar}>
-            <TransportBar
-              listening={listening}
-              rate={rate}
-              onStop={handleStop}
-              onPlayPause={handlePlayPause}
-              onSlower={() => setRate(Math.max(0.5, rate - 0.25))}
-              onFaster={() => setRate(Math.min(2.0, rate + 0.25))}
-            />
-          </BlurView>
-        ) : (
-          <View style={[styles.glassBar, styles.glassBarWeb]}>
-            <TransportBar
-              listening={listening}
-              rate={rate}
-              onStop={handleStop}
-              onPlayPause={handlePlayPause}
-              onSlower={() => setRate(Math.max(0.5, rate - 0.25))}
-              onFaster={() => setRate(Math.min(2.0, rate + 0.25))}
-            />
-          </View>
-        )}
-      </View>
-
+      <TapGestureHandler numberOfTaps={2} onActivated={toggleChrome}>
+        <View style={{ flex: 1 }} collapsable={false}>
       <FlatList
         ref={flatListRef}
         data={blocks}
         renderItem={renderBlock}
         keyExtractor={(_, index) => `${chapterNumber}-${index}`}
+        extraData={`${narration.activeBlockIndex ?? ""}-${reading.fontId}-${reading.fontSize}`}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: 88 + dockPad },
+          { paddingTop: controlsVisible ? 108 : 56, paddingBottom: controlsVisible ? 88 + dockPad : 24 },
         ]}
         showsVerticalScrollIndicator={false}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
             flatListRef.current?.scrollToIndex({
               index: info.index,
-              animated: true,
+              animated: false,
             });
           }, 100);
         }}
@@ -477,10 +300,14 @@ export default function EbookReadAloud({
               </Text>
             ) : null}
             <Text style={styles.readHint}>
-              {listening
-                ? "Tap the page to pause and read silently"
-                : userPaused
-                ? "Paused — read here, or press play to continue"
+              {narration.preparing
+                ? "Preparing the narrator…"
+                : narration.error
+                ? narration.error
+                : listening
+                ? "Double-tap the page to hide the player"
+                : narration.isPaused
+                ? "Paused — press play to continue"
                 : "Press play to hear this chapter. Long-press a paragraph to start there."}
             </Text>
             {showBusy ? (
@@ -491,10 +318,71 @@ export default function EbookReadAloud({
           </View>
         }
       />
+        </View>
+      </TapGestureHandler>
 
+      <View style={styles.toolRow}>
+        <TouchableOpacity
+          style={styles.toolButton}
+          onPress={() => {
+            setFontOpen(false);
+            setVoiceOpen(true);
+          }}
+          accessibilityLabel="Choose voice"
+        >
+          <Ionicons name="mic-outline" size={18} color="#1F2937" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.toolButton}
+          onPress={() => {
+            setVoiceOpen(false);
+            setFontOpen(true);
+          }}
+          accessibilityLabel="Text style"
+        >
+          <Text style={[styles.toolAa, { fontFamily: reading.fontFamily }]}>Aa</Text>
+        </TouchableOpacity>
+      </View>
+
+      {controlsVisible ? (
+      <View style={styles.floatingPlayContainer} pointerEvents="box-none">
+        {Platform.OS !== "web" ? (
+          <View style={styles.glassBar}>
+            <BlurView
+              pointerEvents="none"
+              intensity={80}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+            />
+            <TransportBar
+              listening={listening}
+              preparing={narration.preparing}
+              rate={narration.rate}
+              onStop={handleStop}
+              onPlayPause={handlePlayPause}
+              onSlower={() => narration.setRate(Math.max(0.5, narration.rate - 0.25))}
+              onFaster={() => narration.setRate(Math.min(2.0, narration.rate + 0.25))}
+            />
+          </View>
+        ) : (
+          <View style={[styles.glassBar, styles.glassBarWeb]}>
+            <TransportBar
+              listening={listening}
+              preparing={narration.preparing}
+              rate={narration.rate}
+              onStop={handleStop}
+              onPlayPause={handlePlayPause}
+              onSlower={() => narration.setRate(Math.max(0.5, narration.rate - 0.25))}
+              onFaster={() => narration.setRate(Math.min(2.0, narration.rate + 0.25))}
+            />
+          </View>
+        )}
+      </View>
+      ) : null}
+
+      {controlsVisible ? (
       <View
         style={[styles.chapterDock, { paddingBottom: dockPad }]}
-        pointerEvents="box-none"
       >
         <TouchableOpacity
           style={[styles.dockNav, !hasPrev && styles.dockNavDisabled]}
@@ -520,11 +408,15 @@ export default function EbookReadAloud({
           activeOpacity={0.85}
           accessibilityLabel={listening ? "Pause reading" : "Play reading"}
         >
-          <Ionicons
-            name={listening ? "pause" : "play"}
-            size={22}
-            color="#FFFFFF"
-          />
+          {narration.preparing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons
+              name={listening ? "pause" : "play"}
+              size={22}
+              color="#FFFFFF"
+            />
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -553,12 +445,26 @@ export default function EbookReadAloud({
           />
         </TouchableOpacity>
       </View>
+      ) : null}
+      <BibleFontSheet visible={fontOpen} onClose={() => setFontOpen(false)} />
+      <BibleVoiceSheet
+        visible={voiceOpen}
+        voices={BIBLE_NARRATORS.map((voice) => ({
+          id: voice.id,
+          name: voice.name,
+          description: "Narrator",
+        }))}
+        selectedId={narration.readerId}
+        onSelect={handleSelectVoice}
+        onClose={() => setVoiceOpen(false)}
+      />
     </View>
   );
 }
 
 function TransportBar({
   listening,
+  preparing,
   rate,
   onStop,
   onPlayPause,
@@ -566,6 +472,7 @@ function TransportBar({
   onFaster,
 }: {
   listening: boolean;
+  preparing: boolean;
   rate: number;
   onStop: () => void;
   onPlayPause: () => void;
@@ -603,11 +510,15 @@ function TransportBar({
             activeOpacity={0.8}
             accessibilityLabel={listening ? "Pause reading" : "Play reading"}
           >
-            <Ionicons
-              name={listening ? "pause" : "play"}
-              size={24}
-              color="#FFFFFF"
-            />
+            {preparing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons
+                name={listening ? "pause" : "play"}
+                size={24}
+                color="#FFFFFF"
+              />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -661,11 +572,33 @@ const styles = StyleSheet.create({
   },
   floatingPlayContainer: {
     position: "absolute",
-    top: 16,
+    top: 56,
     left: 16,
     right: 16,
     alignItems: "center",
-    zIndex: 20,
+    zIndex: 30,
+    elevation: 30,
+  },
+  toolRow: {
+    position: "absolute",
+    top: 12,
+    right: 16,
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 31,
+    elevation: 31,
+  },
+  toolButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+  },
+  toolAa: {
+    fontSize: 16,
+    color: "#1F2937",
   },
   glassBar: {
     width: 270,
@@ -763,7 +696,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 88,
+    paddingTop: 156,
   },
   chapterHeader: {
     marginBottom: 16,
@@ -797,6 +730,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 16,
     paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  blockActive: {
+    backgroundColor: "#FDE68A",
   },
   blockNumber: {
     fontSize: 12,
@@ -830,6 +768,8 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     bottom: 8,
+    zIndex: 30,
+    elevation: 30,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

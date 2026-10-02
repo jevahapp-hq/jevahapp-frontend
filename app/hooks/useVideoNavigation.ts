@@ -8,10 +8,16 @@ import { useReelsStore } from "@/store/useReelsStore";
 import { MediaItem } from "../types/media";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { getUserDisplayNameFromContent } from "../utils/userValidation";
+import { suspendFeedDecoders } from "../../src/features/media/video-feed/feedDecoderGate";
 import { savePlayhead } from "../../src/features/media/video-feed/playheadCache";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import { ensureTabPrefixedFeedKey, isHomeOriginReelsSource } from "../../src/features/media/video-feed";
 import { rememberHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
+import { isForgottenMedia } from "../../src/shared/media/ownUploads";
+
+function withoutForgottenUploads<T>(list: T[]): T[] {
+  return list.filter((item) => !isForgottenMedia(item));
+}
 
 interface VideoNavigationOptions {
   video: MediaItem;
@@ -75,6 +81,8 @@ function mapVideoForReels(
     speakerAvatar: v.speakerAvatar || null,
     _id: v._id || `temp-${idx}`,
     id: v.id ?? v._id ?? `temp-${idx}`,
+    mediaId: (v as any).mediaId,
+    videoUrl: (v as any).videoUrl || "",
     contentType: v.contentType || "video",
     description: v.description || "",
     createdAt: v.createdAt || new Date().toISOString(),
@@ -154,7 +162,9 @@ export const useVideoNavigation = () => {
       }
     }
 
-    // Pause feed players without blocking navigation
+    // Drop feed decoders before the reel screen creates its own.
+    // Holding both is what turns the reel black and closes the app.
+    suspendFeedDecoders();
     try {
       globalVideoStore.pauseAllVideos();
     } catch (e) {
@@ -220,12 +230,15 @@ export const useVideoNavigation = () => {
     }
 
     void Promise.resolve().then(() => {
-      const videoListForNavigation = allVideos.map(mapOne);
-      reelsStore.setVideoList(videoListForNavigation);
+      const videoListForNavigation = withoutForgottenUploads(allVideos.map(mapOne));
+      if (videoListForNavigation.length > 0) {
+        reelsStore.setVideoList(videoListForNavigation);
+      }
       void UserProfileCache.enrichContentArrayBatch(videoListForNavigation)
         .then((enrichedList) => {
-          if (enrichedList && enrichedList.length > 0) {
-            reelsStore.setVideoList(enrichedList);
+          const visible = withoutForgottenUploads(enrichedList || []);
+          if (visible.length > 0) {
+            reelsStore.setVideoList(visible);
           }
         })
         .catch((err) => {

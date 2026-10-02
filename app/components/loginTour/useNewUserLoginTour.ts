@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { InteractionManager } from "react-native";
 import { useUserProfile } from "../../hooks/useUserProfile";
 import { trackEvent } from "../../utils/analytics";
 import {
@@ -37,11 +36,11 @@ export function useNewUserLoginTour() {
       trackEvent("tour_shown", { userId: userId || undefined });
     };
 
-    const task = InteractionManager.runAfterInteractions(reveal);
+    const task = requestIdleCallback(reveal);
     const fallback = setTimeout(reveal, 900);
     return () => {
       cancelled = true;
-      task.cancel();
+      cancelIdleCallback(task);
       clearTimeout(fallback);
     };
   }, [userId, createdAt]);

@@ -18,6 +18,7 @@ import {
 import { MiniCardSkeleton } from "../../../../src/shared/components/Skeleton";
 import { useReelsStore } from "@/store/useReelsStore";
 import { getVideoKey } from "../utils";
+import { buildContentShareFromItem } from "../../../../src/shared/share/contentShare";
 import { RecommendedItem } from "../types";
 
 interface VideoComponentMiniCardsProps {
@@ -99,11 +100,7 @@ export function VideoComponentMiniCards({
 
   const handleShare = async (item: RecommendedItem) => {
     try {
-      await Share.share({
-        title: item.title,
-        message: `Check out this video: ${item.title}\n${item.fileUrl}`,
-        url: item.fileUrl,
-      });
+      await Share.share(buildContentShareFromItem(item));
     } catch (error) {
       console.warn("Share error:", error);
     }

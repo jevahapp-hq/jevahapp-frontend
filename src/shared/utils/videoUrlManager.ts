@@ -207,6 +207,10 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
     mime.startsWith("video/") ||
     mime === "videos" ||
     mime === "video" ||
+    contentType === "videos" ||
+    contentType === "video" ||
+    contentType === "gif" ||
+    contentType === "gifs" ||
     (contentType === "sermon" && mediaType !== "audio");
 
   const durationSec = Number(media?.duration ?? media?.durationSec) || 0;
@@ -221,6 +225,16 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
     processingStatus !== "failed";
 
   const isHls = (u: string) => /\.m3u8(\?|#|$)/i.test(u);
+  const stillProcessing =
+    processingStatus === "processing" ||
+    processingStatus === "pending" ||
+    processingStatus === "queued";
+  // A not-ready HLS playlist hides the upload. Play the original file first.
+  if (stillProcessing) {
+    if (safeFileUrl && !isHls(safeFileUrl)) return safeFileUrl;
+    if (safePlaybackUrl && !isHls(safePlaybackUrl)) return safePlaybackUrl;
+  }
+
   const isProgressive = (u: string) =>
     !!u &&
     !isHls(u) &&
@@ -360,7 +374,11 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   const normalizedUrl = fixOverEncodedMediaUrl(originalUrl.trim());
 
   // Handle local file URLs (downloaded content) - return immediately without validation
-  if (normalizedUrl.startsWith('file://') || normalizedUrl.startsWith('/')) {
+  if (
+    normalizedUrl.startsWith("file://") ||
+    normalizedUrl.startsWith("content://") ||
+    normalizedUrl.startsWith("/")
+  ) {
     urlLog(`📁 Using local file URL: ${normalizedUrl.substring(0, 100)}...`);
     return normalizedUrl;
   }

@@ -8,6 +8,7 @@ import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQu
 import { persistStats } from "../../../utils/persistentStorage";
 import { resolveLikeSeed } from "../../../../src/shared/hooks/useContentLikeState";
 import { resolveSaveSeed } from "../../../../src/shared/hooks/useContentSaveState";
+import { buildContentShareFromItem } from "../../../../src/shared/share/contentShare";
 
 interface UseSermonInteractionsParams {
   videoRefs: MutableRefObject<Record<string, any>>;
@@ -54,11 +55,9 @@ export function useSermonInteractions({
 
   const handleShare = async (key: string, item: any) => {
     try {
-      const result = await Share.share({
-        title: item.title,
-        message: `Check this out: ${item.title}\n${item.fileUrl}`,
-        url: item.fileUrl,
-      });
+      const result = await Share.share(
+        buildContentShareFromItem(item, item._id || key)
+      );
 
       if (result.action === Share.sharedAction) {
         setContentStats((prev) => {

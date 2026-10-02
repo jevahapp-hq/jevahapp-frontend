@@ -12,7 +12,9 @@ export function shouldHoldVideoStill(options: {
   isSurfaceActive: boolean;
   pendingResumeSec?: number | null;
 }): boolean {
-  if (!options.isSurfaceActive) return true;
+  // A painted frame stays on screen while the reel is paused, so scrolling
+  // shows video-to-video instead of the cover thumbnail.
   if (!options.nativeFirstFrame) return true;
+  if (!options.isSurfaceActive) return false;
   return (options.pendingResumeSec ?? 0) > 0.4;
 }

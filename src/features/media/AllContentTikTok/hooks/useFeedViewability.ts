@@ -9,6 +9,19 @@ import {
   FEED_VIDEO_VISIBLE_PERCENT,
 } from "../../video-feed";
 import type { FeedRow } from "../types";
+/** Long enough to skip videos a flick only passes through, short enough to feel instant. */
+const PLAY_SWITCH_MS = 48;
+
+function firstMediaRow(info: ViewabilityInfo | null | undefined): FeedRow | null {
+  const items = info?.viewableItems;
+  if (!Array.isArray(items)) return null;
+  for (const token of items) {
+    const row = token?.item;
+    if (!row || row.rowType !== "media") continue;
+    return row;
+  }
+  return null;
+}
 
 type ViewabilityInfo = {
   viewableItems: Array<{ item: FeedRow; isViewable: boolean }>;
@@ -44,6 +57,10 @@ export function useFeedViewability(options: {
   } = options;
 
   const hasDeterminedVisibilityRef = useRef(false);
+  const visibleIsVideoRef = useRef(false);
+  const scrollingRef = useRef(false);
+  const pausedForScrollKeyRef = useRef<string | null>(null);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playingAudioIdRef = useRef(playingAudioId);
   useEffect(() => {
@@ -76,13 +93,7 @@ export function useFeedViewability(options: {
 
     hasDeterminedVisibilityRef.current = true;
 
-    let topRow: FeedRow | null = null;
-    for (const token of info.viewableItems) {
-      const row = token.item;
-      if (!row || row.rowType !== "media") continue;
-      topRow = row;
-      break;
-    }
+    let topRow: FeedRow | null = firstMediaRow(info);
 
     const topKey = topRow?.key ?? null;
     const topItem = topRow?.item;
@@ -101,7 +112,21 @@ export function useFeedViewability(options: {
     }
 
     const prevKey = currentlyVisibleVideoRef.current;
-    if (topKey === prevKey) return;
+    if (topKey === prevKey) {
+      // A flick pauses the clip under the finger. Landing back on it must
+      // start it again — the equal-key path used to swallow that replay.
+      if (
+        topKey &&
+        isTopVideo &&
+        pausedForScrollKeyRef.current === topKey &&
+        isAutoPlayEnabledRef.current
+      ) {
+        pausedForScrollKeyRef.current = null;
+        playMediaRef.current(topKey, "video");
+      }
+      return;
+    }
+    pausedForScrollKeyRef.current = null;
 
     if (prevKey && useGlobalVideoStore.getState().playingVideos[prevKey]) {
       pauseMediaRef.current(prevKey);
@@ -119,6 +144,7 @@ export function useFeedViewability(options: {
       useCopyrightFreeOverlayStore.getState().minimize();
     }
 
+    visibleIsVideoRef.current = isTopVideo;
     setCurrentlyVisibleVideo(isTopVideo ? topKey : null);
     currentlyVisibleVideoRef.current = isTopVideo ? topKey : null;
     if (isTopVideo && topKey && isAutoPlayEnabledRef.current) {
@@ -138,27 +164,26 @@ export function useFeedViewability(options: {
     handleVideoViewabilityRef.current = handleVideoViewabilityImpl;
   }, [handleVideoViewabilityImpl]);
 
-  const onVideoViewableItemsChanged = useCallback((info: any) => {
-    handleVideoViewabilityRef.current(info);
-  }, []);
+  const pendingVideoInfoRef = useRef<ViewabilityInfo | null>(null);
+  const pendingAudioInfoRef = useRef<ViewabilityInfo | null>(null);
+  const pendingFocusInfoRef = useRef<ViewabilityInfo | null>(null);
+  const switchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleViewabilityRef = useRef<(info: ViewabilityInfo | null) => void>(
+    () => {}
+  );
 
   const handleAudioViewabilityImpl = useCallback((info: ViewabilityInfo) => {
     if (!isFeedActiveRef.current) return;
     if (commentsOpenRef.current) return;
 
-    let topRow: FeedRow | null = null;
-    for (const token of info.viewableItems) {
-      const row = token.item;
-      if (!row || row.rowType !== "media") continue;
-      topRow = row;
-      break;
-    }
+    let topRow: FeedRow | null = firstMediaRow(info);
 
     const topKey = topRow?.key ?? null;
     const topItem = topRow?.item;
     const isTopAudioSermon = Boolean(topItem && isAudioSermon(topItem));
 
     if (isTopAudioSermon && topItem && topKey) {
+      visibleIsVideoRef.current = false;
       const prevKey = currentlyVisibleVideoRef.current;
       if (
         prevKey &&
@@ -193,20 +218,15 @@ export function useFeedViewability(options: {
   }, [handleAudioViewabilityImpl]);
 
   const onAudioViewableItemsChanged = useCallback((info: any) => {
-    handleAudioViewabilityRef.current(info);
+    pendingAudioInfoRef.current = info;
+    scheduleViewabilityRef.current(info);
   }, []);
 
   const handleRowFocusImpl = useCallback(
     (info: ViewabilityInfo) => {
       if (!isFeedActiveRef.current) return;
       if (commentsOpenRef.current) return;
-      let topKey: string | null = null;
-      for (const token of info.viewableItems) {
-        const row = token.item;
-        if (!row || row.rowType !== "media") continue;
-        topKey = row.key;
-        break;
-      }
+      let topKey: string | null = firstMediaRow(info)?.key ?? null;
       setFocusedFeedKey((prev) => (prev === topKey ? prev : topKey));
     },
     [commentsOpenRef, isFeedActiveRef, setFocusedFeedKey]
@@ -216,8 +236,107 @@ export function useFeedViewability(options: {
     handleRowFocusRef.current = handleRowFocusImpl;
   }, [handleRowFocusImpl]);
   const onRowFocusViewableItemsChanged = useCallback((info: any) => {
-    handleRowFocusRef.current(info);
+    pendingFocusInfoRef.current = info;
+    scheduleViewabilityRef.current(info);
   }, []);
+
+  const topMediaKey = (info: ViewabilityInfo | null): string | null =>
+    firstMediaRow(info)?.key ?? null;
+
+  const flushViewability = useCallback(() => {
+    const video = pendingVideoInfoRef.current;
+    const audio = pendingAudioInfoRef.current;
+    const focus = pendingFocusInfoRef.current;
+    if (video) handleVideoViewabilityRef.current(video);
+    if (audio) handleAudioViewabilityRef.current(audio);
+    if (focus) handleRowFocusRef.current(focus);
+  }, []);
+
+  const scheduleViewability = useCallback(
+    (info: ViewabilityInfo | null) => {
+      const nextKey = topMediaKey(info);
+      const prevKey = currentlyVisibleVideoRef.current;
+      // Silence the clip being left immediately. Do not drop its player
+      // while the finger is still moving — creating and releasing ExoPlayer
+      // mid-gesture crashes Android.
+      if (
+        prevKey &&
+        nextKey &&
+        prevKey !== nextKey &&
+        useGlobalVideoStore.getState().playingVideos[prevKey]
+      ) {
+        pauseMediaRef.current(prevKey);
+        if (scrollingRef.current) {
+          pausedForScrollKeyRef.current = prevKey;
+        } else {
+          currentlyVisibleVideoRef.current = null;
+        }
+      }
+      if (scrollingRef.current) return;
+      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+      switchTimerRef.current = setTimeout(() => {
+        switchTimerRef.current = null;
+        flushViewability();
+      }, PLAY_SWITCH_MS);
+    },
+    [currentlyVisibleVideoRef, flushViewability]
+  );
+  scheduleViewabilityRef.current = scheduleViewability;
+
+  const armIdleSettle = useCallback(() => {
+    if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    // Play the card that is actually on screen once motion stops.
+    // Android often drops momentum-end, which used to leave the feed paused.
+    scrollEndTimerRef.current = setTimeout(() => {
+      scrollEndTimerRef.current = null;
+      scrollingRef.current = false;
+      flushViewability();
+    }, 140);
+  }, [flushViewability]);
+
+  const onFeedScrollState = useCallback(
+    (phase: "begin" | "end" | "settle" | "tick") => {
+      if (phase === "begin") {
+        scrollingRef.current = true;
+        if (switchTimerRef.current) {
+          clearTimeout(switchTimerRef.current);
+          switchTimerRef.current = null;
+        }
+        armIdleSettle();
+        return;
+      }
+      if (phase === "tick") {
+        if (scrollingRef.current) armIdleSettle();
+        return;
+      }
+      if (phase === "end") {
+        armIdleSettle();
+        return;
+      }
+      if (scrollEndTimerRef.current) {
+        clearTimeout(scrollEndTimerRef.current);
+        scrollEndTimerRef.current = null;
+      }
+      scrollingRef.current = false;
+      flushViewability();
+    },
+    [armIdleSettle, flushViewability]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    };
+  }, []);
+
+  const onVideoViewableItemsChanged = useCallback(
+    (info: any) => {
+      pendingVideoInfoRef.current = info;
+      scheduleViewability(info);
+    },
+    [scheduleViewability]
+  );
 
   const videoViewabilityConfig = useRef({
     itemVisiblePercentThreshold: FEED_VIDEO_VISIBLE_PERCENT,
@@ -229,7 +348,7 @@ export function useFeedViewability(options: {
   }).current;
   const rowFocusViewabilityConfig = useRef({
     itemVisiblePercentThreshold: 35,
-    minimumViewTime: 120,
+    minimumViewTime: 0,
   }).current;
 
   const viewabilityConfigCallbackPairs = useRef([
@@ -247,5 +366,9 @@ export function useFeedViewability(options: {
     },
   ]).current;
 
-  return { hasDeterminedVisibilityRef, viewabilityConfigCallbackPairs };
+  return {
+    hasDeterminedVisibilityRef,
+    viewabilityConfigCallbackPairs,
+    onFeedScrollState,
+  };
 }

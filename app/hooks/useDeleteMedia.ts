@@ -5,7 +5,7 @@ import { deleteMedia, isMediaOwner } from "../utils/mediaDeleteAPI";
 import { Alert } from "react-native";
 
 interface UseDeleteMediaReturn {
-  deleteMediaItem: (mediaId: string) => Promise<boolean>;
+  deleteMediaItem: (mediaId: string | string[]) => Promise<boolean>;
   checkOwnership: (uploadedBy: string | { _id: string } | undefined, mediaItem?: any) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
@@ -31,7 +31,7 @@ export const useDeleteMedia = (): UseDeleteMediaReturn => {
   );
 
   const deleteMediaItem = useCallback(
-    async (mediaId: string): Promise<boolean> => {
+    async (mediaId: string | string[]): Promise<boolean> => {
       // Prevent duplicate calls
       if (isLoading) {
         console.log("⚠️ Delete already in progress, ignoring duplicate call");
@@ -51,15 +51,12 @@ export const useDeleteMedia = (): UseDeleteMediaReturn => {
         return false;
       } catch (err: any) {
         const errorMessage = err.message || "Failed to delete media";
-        // Don't show alert for 404 if media was already deleted (handled in deleteMedia)
-        if (!errorMessage.includes("already been deleted") && !errorMessage.includes("not found")) {
-          setError(errorMessage);
-          Alert.alert("Delete Failed", errorMessage);
-        } else {
-          // Media was already deleted, treat as success
+        if (errorMessage.includes("already been deleted")) {
           setSuccess(true);
           return true;
         }
+        setError(errorMessage);
+        Alert.alert("Delete Failed", errorMessage);
         return false;
       } finally {
         setIsLoading(false);

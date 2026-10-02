@@ -2,8 +2,26 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../utils/dataFetching";
+import {
+  readHeaderProfile,
+  startHeaderProfileHydrate,
+  writeHeaderProfile,
+  type HeaderProfileSnapshot,
+} from "../utils/headerProfileCache";
 import { pickDisplayAvatarUrl } from "../utils/persistUserAvatar";
 import TokenUtils from "../utils/tokenUtils";
+
+function userFromSnapshot(snap: HeaderProfileSnapshot | null): User | null {
+  if (!snap) return null;
+  if (!snap.firstName && !snap.lastName && !snap.avatar) return null;
+  return {
+    id: snap.id,
+    firstName: snap.firstName || "",
+    lastName: snap.lastName || "",
+    avatar: snap.avatar || null,
+    section: snap.section || "adult",
+  };
+}
 
 // User type based on the new API response structure
 export type User = {
@@ -16,6 +34,7 @@ export type User = {
   avatarUpload?: string | null;
   avatarUpdatedAt?: number | null;
   bio?: string | null;
+  location?: string | null;
   section?: string;
   role?: string;
   isProfileComplete?: boolean;
@@ -28,31 +47,38 @@ export type User = {
 export const useUserProfile = () => {
   const queryClient = useQueryClient();
   
-  // Try to load from AsyncStorage first for instant display
-  const [initialUser, setInitialUser] = useState<User | null>(null);
+  // Paint the header from the snapshot that started loading at app boot.
+  const [initialUser, setInitialUser] = useState<User | null>(() =>
+    userFromSnapshot(readHeaderProfile())
+  );
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [hasAuthToken, setHasAuthToken] = useState(false);
 
-  // Load from AsyncStorage on mount for instant display
   useEffect(() => {
-    const loadFromStorage = async () => {
+    let cancelled = false;
+    void (async () => {
       try {
-        const [storedUser, token] = await Promise.all([
-          AsyncStorage.getItem("user"),
+        const [snap, token] = await Promise.all([
+          startHeaderProfileHydrate(),
           TokenUtils.getAuthToken(),
         ]);
+        if (cancelled) return;
         setHasAuthToken(Boolean(token));
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setInitialUser(parsedUser);
+        if (!token) {
+          setInitialUser(null);
+          return;
         }
-      } catch (error) {
-        // Silent fail
+        const painted = userFromSnapshot(snap);
+        if (painted) setInitialUser(painted);
+      } catch {
+        // Keep whatever the first frame already painted.
       } finally {
-        setStorageLoaded(true);
+        if (!cancelled) setStorageLoaded(true);
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    loadFromStorage();
   }, []);
 
   // Use React Query for automatic caching (0ms on revisit!)
@@ -120,6 +146,13 @@ export const useUserProfile = () => {
 
       // Save to AsyncStorage for persistence
       await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
+      writeHeaderProfile({
+        id: userWithSection.id,
+        firstName: userWithSection.firstName,
+        lastName: userWithSection.lastName,
+        avatar: avatar,
+        section: userWithSection.section,
+      });
 
       // Cache user profile by userId for content enrichment
       const userId = userWithSection.id || userWithSection._id;
@@ -239,6 +272,13 @@ export const useUserProfile = () => {
       const newUser = { ...finalUser, ...updatedUser };
       queryClient.setQueriesData({ queryKey: ["user-profile"] }, newUser);
       AsyncStorage.setItem("user", JSON.stringify(newUser));
+      writeHeaderProfile({
+        id: newUser.id || newUser._id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        avatar: newUser.avatar || newUser.avatarUpload,
+        section: newUser.section,
+      });
     }
   }, [finalUser, queryClient]);
 
@@ -246,6 +286,7 @@ export const useUserProfile = () => {
     queryClient.setQueriesData({ queryKey: ["user-profile"] }, null);
     queryClient.removeQueries({ queryKey: ["user-profile"] });
     await AsyncStorage.removeItem("user");
+    writeHeaderProfile(null);
     await clearTokens();
   }, [queryClient]);
 

@@ -8,6 +8,7 @@ import type { UploadState } from "../types";
 type UploadProgressModalProps = {
   visible: boolean;
   uploadState: UploadState;
+  onDismiss?: () => void;
 };
 
 function getLoadingMessage(uploadState: UploadState) {
@@ -21,6 +22,7 @@ function getLoadingMessage(uploadState: UploadState) {
 export function UploadProgressModal({
   visible,
   uploadState,
+  onDismiss,
 }: UploadProgressModalProps) {
   const progress = Math.max(0, Math.min(100, uploadState.progress || 0));
 
@@ -30,6 +32,7 @@ export function UploadProgressModal({
       transparent
       animationType="fade"
       onRequestClose={() => {}}
+      onDismiss={onDismiss}
     >
       <View style={styles.backdrop}>
         <View style={styles.card}>

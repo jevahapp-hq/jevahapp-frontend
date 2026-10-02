@@ -2,7 +2,7 @@
  * Document / image pickers for media + thumbnail
  */
 
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 import { detectFileType, getMimeTypeFromName, isGifFile, isImage } from "../utils";
 import {
   alertUploadGuidelineIssues,
@@ -10,7 +10,15 @@ import {
 } from "../utils/uploadGuidelineAlert";
 import { probeVideoDurationSec } from "../utils/probeVideoDuration";
 import type { DetectedFileType, EligibilityStatus, MediaFile } from "../types";
+import {
+  THUMBNAIL_ASPECTS,
+  thumbnailAspectById,
+  thumbnailCropRect,
+  thumbnailMatchesAspect,
+  type ThumbnailAspectId,
+} from "../utils/thumbnailAspect";
 import { shouldProbeUploadDuration } from "../../../../src/shared/lite/liteProfile";
+import { asUploadableVideoFile } from "../utils/asUploadableVideoFile";
 
 /** Lazy native modules — kept off Upload first paint; warmed via prefetchCreateFlows. */
 async function loadImagePicker() {
@@ -18,6 +26,56 @@ async function loadImagePicker() {
 }
 async function loadDocumentPicker() {
   return import("expo-document-picker");
+}
+
+void loadImagePicker().catch(() => undefined);
+
+/**
+ * On iPhone, asking for photo access before the library opens can sit for
+ * minutes while Photos prepares a large iCloud library. The system picker
+ * can show the library without that call.
+ */
+async function libraryPermissionGranted(
+  ImagePicker: {
+    requestMediaLibraryPermissionsAsync: () => Promise<{ status: string }>;
+  },
+  message: string
+): Promise<boolean> {
+  if (Platform.OS === "ios") return true;
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== "granted") {
+    Alert.alert("Permission needed", message);
+    return false;
+  }
+  return true;
+}
+
+async function cropCoverFile(
+  uri: string,
+  width: number,
+  height: number,
+  aspectId: ThumbnailAspectId
+): Promise<{ uri: string; width: number; height: number } | null> {
+  const rect = thumbnailCropRect(width, height, aspectId);
+  if (!rect) return null;
+  const alreadyFits =
+    rect.originX === 0 &&
+    rect.originY === 0 &&
+    rect.width === Math.round(width) &&
+    rect.height === Math.round(height);
+  if (alreadyFits) {
+    return { uri, width: rect.width, height: rect.height };
+  }
+  const { manipulateAsync, SaveFormat } = await import("expo-image-manipulator");
+  const cropped = await manipulateAsync(uri, [{ crop: rect }], {
+    compress: 0.8,
+    format: SaveFormat.JPEG,
+  });
+  return {
+    uri: cropped.uri,
+    width: cropped.width,
+    height: cropped.height,
+  };
 }
 
 type UseMediaPickersParams = {
@@ -102,6 +160,7 @@ export function useMediaPickers({
   validateMediaEligibilityLocal,
 }: UseMediaPickersParams) {
   const commitPickedFile = (selectedFile: MediaFile) => {
+    selectedFile = asUploadableVideoFile(selectedFile);
     setFile(selectedFile);
     const detectedType = detectFileType(selectedFile);
     setDetectedFileType(detectedType);
@@ -130,15 +189,11 @@ export function useMediaPickers({
   const pickGif = async () => {
     try {
       const ImagePicker = await loadImagePicker();
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Allow photo library access to pick a GIF or a short clip."
-        );
-        return;
-      }
+      const allowed = await libraryPermissionGranted(
+        ImagePicker,
+        "Allow photo library access to pick a GIF or a short clip."
+      );
+      if (!allowed) return;
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
@@ -215,15 +270,11 @@ export function useMediaPickers({
   const pickVideoFromLibrary = async () => {
     try {
       const ImagePicker = await loadImagePicker();
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Allow photo library access to select a video."
-        );
-        return;
-      }
+      const allowed = await libraryPermissionGranted(
+        ImagePicker,
+        "Allow photo library access to select a video."
+      );
+      if (!allowed) return;
 
       const mediaTypes =
         ImagePicker.MediaTypeOptions?.Videos ?? ["videos"];
@@ -232,8 +283,14 @@ export function useMediaPickers({
         mediaTypes,
         allowsEditing: false,
         quality: 1,
-        // iPhone camera roll is often HEVC/MOV — request a compatible MP4.
-        preferredAssetRepresentationMode: "compatible",
+        // Screen recordings are MOV (video/quicktime) and often huge.
+        // Compatible + H.264 export hands back an MP4 the upload API accepts,
+        // and brings long sermon clips under the size cap.
+        preferredAssetRepresentationMode:
+          Platform.OS === "ios" ? "compatible" : "current",
+        ...(Platform.OS === "ios"
+          ? { videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality }
+          : {}),
       } as Parameters<typeof ImagePicker.launchImageLibraryAsync>[0]);
 
       if (result.canceled || !result.assets?.length) return;
@@ -351,39 +408,84 @@ export function useMediaPickers({
     await pickDocument();
   };
 
-  const pickThumbnail = async () => {
+  const launchThumbnailCrop = async (aspectId: ThumbnailAspectId) => {
     try {
       const ImagePicker = await loadImagePicker();
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const allowed = await libraryPermissionGranted(
+        ImagePicker,
+        "Please allow access to photo library to select a cover photo."
+      );
+      if (!allowed) return;
 
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Please allow access to photo library to select a cover photo."
-        );
-        return;
-      }
-
+      const aspect = thumbnailAspectById(aspectId);
+      // allowsEditing opens the old iPhone library, which can take minutes
+      // to show photos. Android can crop in the picker. iPhone crops after.
+      const cropInPicker = Platform.OS !== "ios";
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: cropInPicker,
+        aspect: [aspect.width, aspect.height],
+        quality: cropInPicker ? 0.8 : 1,
+        preferredAssetRepresentationMode: "current",
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
+        let uri = asset.uri;
+        let width = asset.width;
+        let height = asset.height;
+        if (
+          cropInPicker &&
+          !thumbnailMatchesAspect(width, height, aspectId)
+        ) {
+          Alert.alert(
+            "Cover shape",
+            "Use 1:1, 9:16, or 16:9. Choose a shape and crop again."
+          );
+          return;
+        }
+        if (
+          !cropInPicker &&
+          width &&
+          height &&
+          !thumbnailMatchesAspect(width, height, aspectId)
+        ) {
+          try {
+            const cropped = await cropCoverFile(uri, width, height, aspectId);
+            if (cropped) {
+              uri = cropped.uri;
+              width = cropped.width;
+              height = cropped.height;
+            }
+          } catch (cropError) {
+            console.warn("Cover crop failed:", cropError);
+          }
+        }
         setThumbnail({
-          uri: asset.uri,
+          uri,
           name: `thumbnail_${Date.now()}.jpg`,
           mimeType: "image/jpeg",
+          thumbnailAspect: aspectId,
+          width,
+          height,
         });
       }
     } catch (error) {
       console.error("Error picking thumbnail:", error);
       Alert.alert("Error", "Failed to select cover photo.");
     }
+  };
+
+  const pickThumbnail = () => {
+    Alert.alert("Cover shape", "Choose 1:1, 9:16, or 16:9.", [
+      ...THUMBNAIL_ASPECTS.map((aspect) => ({
+        text: aspect.label,
+        onPress: () => {
+          void launchThumbnailCrop(aspect.id);
+        },
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   };
 
   return { pickMedia, pickThumbnail };

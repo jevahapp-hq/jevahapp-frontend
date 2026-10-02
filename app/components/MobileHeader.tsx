@@ -3,11 +3,31 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Image, StatusBar, Text, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
+import { StatusBar, Text, TouchableOpacity as RNTouchableOpacity, View, type GestureResponderEvent } from "react-native";
 import {
   initialWindowMetrics,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
+/** Header icons run on touch-down so they feel like a click. */
+function TouchableOpacity(props: React.ComponentProps<typeof RNTouchableOpacity>) {
+  const { onPress, onPressIn, onLongPress, disabled, ...rest } = props;
+  if (onLongPress) {
+    return <RNTouchableOpacity {...props} delayPressIn={0} />;
+  }
+  return (
+    <RNTouchableOpacity
+      {...rest}
+      disabled={disabled}
+      delayPressIn={0}
+      onPressIn={(event: GestureResponderEvent) => {
+        onPressIn?.(event);
+        if (!disabled) onPress?.(event);
+      }}
+    />
+  );
+}
 
 interface MobileHeaderProps {
   // Header type
@@ -137,20 +157,17 @@ export default function MobileHeader({
             !avatarError ? (
             <Image
               source={{ uri: user.avatar.trim() }}
-              className="w-10 h-10 rounded-lg"
-              style={{ borderWidth: 1, borderColor: "#E5E7EB" }}
-              onError={(error) => {
-                console.warn(
-                  "❌ Failed to load avatar image:",
-                  error.nativeEvent.error
-                );
-                setTimeout(() => setAvatarError(true), 0);
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
               }}
-              onLoad={() => {
-                console.log(
-                  "✅ Avatar image loaded successfully:",
-                  user?.avatar
-                );
+              onError={() => {
+                setAvatarError(true);
               }}
             />
           ) : (

@@ -34,7 +34,7 @@ export const ThreeDotsMenuButton: React.FC<ThreeDotsMenuButtonProps> = ({
 
   return (
     <Pressable
-      onPress={handlePress}
+      onPressIn={handlePress}
       hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
       style={({ pressed }) => [
         styles.button,

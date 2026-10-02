@@ -64,6 +64,9 @@ export interface MediaItem extends BaseEntity {
   hasViewed?: boolean;
   hasShared?: boolean;
   moderationStatus?: "approved" | "under_review" | "rejected";
+  /** Kept so a live post is not labeled under review when a review field is stale. */
+  publicationState?: string | null;
+  isHidden?: boolean;
   /** Async media worker status — seekable only when ready + duration > 0 */
   processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
   /** audio | video from typed catalogs — sermons can be either */
@@ -79,7 +82,6 @@ export interface MediaItem extends BaseEntity {
     prefetchCount?: number;
     imageMaxEdge?: number;
   };
-  isHidden?: boolean;
   category?: string[];
   userId?: string;
   artistName?: string;

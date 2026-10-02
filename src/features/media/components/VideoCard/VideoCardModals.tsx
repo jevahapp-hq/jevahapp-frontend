@@ -87,6 +87,7 @@ export function VideoCardModals({
       <DeleteMediaConfirmation
         visible={showDeleteModal}
         mediaId={video._id || ""}
+        mediaItem={video}
         mediaTitle={video.title || "this media"}
         onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}

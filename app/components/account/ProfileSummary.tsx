@@ -155,6 +155,23 @@ export default function ProfileSummary({
           </TouchableOpacity>
         ) : null}
 
+        <TouchableOpacity
+          className="mb-3 px-4"
+          onPress={() =>
+            router.push({
+              pathname: "/Profile/churchNameAndLocation",
+              params: { mode: "edit" },
+            })
+          }
+        >
+          <Text className="text-[#3B3B3B] text-sm text-center">
+            {user?.location ? user.location : "Add your church"}
+          </Text>
+          <Text className="text-[#FEA74E] font-medium text-center mt-1">
+            {user?.location ? "Edit church" : "Search or enter a church name"}
+          </Text>
+        </TouchableOpacity>
+
         {user?.bio ? (
           <View className="px-4 mb-2">
             <Text className="text-[#3B3B3B] text-sm text-center">{user.bio}</Text>

@@ -52,13 +52,9 @@ function tryCreateMmkvStore(): KvStore | null {
       set: (k, v) => instance.set(k, v),
       remove: (k) => instance.remove(k),
     };
-  } catch (e) {
-    if (__DEV__) {
-      console.warn(
-        "⚠️ MMKV/NitroModules unavailable — using memory+AsyncStorage fallback. Rebuild a native dev client with react-native-mmkv for sync cold-start cache.",
-        e instanceof Error ? e.message : e
-      );
-    }
+  } catch {
+    // Native NitroModules is absent (Expo Go or a dev client built before MMKV).
+    // Memory + AsyncStorage is the supported fallback until that binary is rebuilt.
     return null;
   }
 }

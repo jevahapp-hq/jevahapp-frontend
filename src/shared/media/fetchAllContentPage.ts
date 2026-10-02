@@ -16,6 +16,8 @@ import { hasForYouItems } from "./chooseAllContentPage";
 import type { MediaItem } from "../types";
 import { transformApiResponseToMediaItem } from "../utils";
 import { mergeAuthorFieldsByMediaId, paintAuthorsFromCache } from "../author";
+import { markUnspecifiedCatalogItemsApproved } from "./moderationStatus";
+import { prependRecentApprovals } from "./prependRecentApprovals";
 import { syncMediaStatsToInteractionStore } from "./syncMediaStats";
 
 export type AllContentPageResult = {
@@ -156,13 +158,14 @@ export function readSeededFirstPage(
   return undefined;
 }
 
-function toMediaItems(raw: any[]): MediaItem[] {
+function toMediaItems(raw: any[], publicCatalog = false): MediaItem[] {
   if (!raw.length) return [];
-  return paintAuthorsFromCache(
+  const items = paintAuthorsFromCache(
     UserProfileCache.enrichContentArray(raw)
       .map(transformApiResponseToMediaItem)
       .filter((item): item is MediaItem => item !== null)
   );
+  return publicCatalog ? markUnspecifiedCatalogItemsApproved(items) : items;
 }
 
 async function fetchChronologicalPage(options: {
@@ -188,7 +191,7 @@ async function fetchChronologicalPage(options: {
   }
 
   const mediaArr = response.media || [];
-  const transformedMedia = toMediaItems(mediaArr);
+  const transformedMedia = toMediaItems(mediaArr, !useAuth);
   const result: AllContentPageResult = {
     media: transformedMedia,
     total: response.total || response.pagination?.total || 0,
@@ -221,7 +224,7 @@ function finishForYouPage(
   donors: any[]
 ): AllContentPageResult {
   const raw = ranked.media?.length ? ranked.media : ranked.items || [];
-  let media = toMediaItems(raw);
+  let media = toMediaItems(raw, true);
   if (donors.length) {
     media = mergeAuthorFieldsByMediaId(donors, media);
   }
@@ -285,7 +288,27 @@ export async function fetchAllContentPage(options: {
     return null;
   });
   if (ranked && hasForYouItems(ranked)) {
-    return finishForYouPage(contentType, useAuth, page, limit, ranked, []);
+    const rankedPage = finishForYouPage(
+      contentType,
+      useAuth,
+      page,
+      limit,
+      ranked,
+      []
+    );
+    if (page !== 1) return rankedPage;
+    const chrono = await fetchChronologicalPage({
+      contentType,
+      page: 1,
+      limit,
+      useAuth: false,
+    }).catch(() => null);
+    if (!chrono?.media?.length) return rankedPage;
+    const media = prependRecentApprovals(rankedPage.media, chrono.media);
+    if (media === rankedPage.media) return rankedPage;
+    const merged = { ...rankedPage, media };
+    seedContentCache(contentType, useAuth, merged);
+    return merged;
   }
 
   const chrono = await fetchChronologicalPage({

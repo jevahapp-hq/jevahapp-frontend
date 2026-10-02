@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -14,7 +14,11 @@ import {
 } from "react-native";
 import { TapGestureHandler } from "react-native-gesture-handler";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
+import { useBibleNarration } from "./useBibleNarration";
 import { BibleVerse, bibleApiService } from "../../services/bibleApiService";
+import { markBreathAtBoundary } from "../../utils/chunkSpeechText";
+import { useBibleReadingStyle } from "../../utils/bibleReadingStyle";
+import type { BibleVoiceChoice } from "./BibleVoiceSheet";
 
 interface BibleReaderProps {
   bookName: string;
@@ -23,11 +27,19 @@ interface BibleReaderProps {
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
   onScreenTap?: () => void;
+  onChromeChange?: (hidden: boolean) => void;
+  chromeVisible?: boolean;
+  onVoiceMenu?: (menu: {
+    voices: BibleVoiceChoice[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+  } | null) => void;
   // Verses already fetched by the verse picker screen - when provided,
   // skips a redundant network request and shows content instantly.
   initialVerses?: BibleVerse[];
   // Verse number the user picked - the reader scrolls to it on open.
   initialVerseNumber?: number | null;
+  translationId?: string;
 }
 
 interface WordPosition {
@@ -43,8 +55,12 @@ export default function BibleReader({
   canNavigatePrev,
   canNavigateNext,
   onScreenTap,
+  onChromeChange,
+  chromeVisible = true,
+  onVoiceMenu,
   initialVerses,
   initialVerseNumber,
+  translationId,
 }: BibleReaderProps) {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,6 +73,16 @@ export default function BibleReader({
   // allWords array when playback starts partway through a chapter.
   const playbackOffsetRef = useRef(0);
   const autoPlayedForRef = useRef<string | null>(null);
+  const narration = useBibleNarration({
+    bookName,
+    chapterNumber,
+    translationId,
+    verses,
+    onChapterEnded: () => {
+      if (canNavigateNext) onNavigateChapter("next");
+    },
+  });
+  const reading = useBibleReadingStyle();
 
   // Slide controls
   const screenWidth = Dimensions.get("window").width;
@@ -68,17 +94,24 @@ export default function BibleReader({
     Animated.timing(topSlideX, {
       toValue: hide ? screenWidth : 0,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
     
   };
 
+  const chromeTapAt = useRef(0);
+  const lastVerseTapAt = useRef(0);
+  const verseTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleTopControls = () => {
-    // Toggle the visibility of the top play controls
-    const nextHidden = !isTopHidden;
-    slideTop(nextHidden);
-    // Notify parent to toggle bottom nav bar too
+    const now = Date.now();
+    if (now - chromeTapAt.current < 380) return;
+    chromeTapAt.current = now;
+    if (verseTapTimer.current) {
+      clearTimeout(verseTapTimer.current);
+      verseTapTimer.current = null;
+    }
     if (onScreenTap) onScreenTap();
+    else slideTop(!isTopHidden);
   };
 
   // bottom nav removed
@@ -182,23 +215,32 @@ export default function BibleReader({
   // verse selector, once everything needed to speak it is ready.
   useEffect(() => {
     if (!initialVerseNumber || allWords.length === 0) return;
-    const key = `${bookName}-${chapterNumber}-${initialVerseNumber}`;
+    if (!narration.available) return;
+    const key = `${translationId || "selected"}-${bookName}-${chapterNumber}-${initialVerseNumber}`;
     if (autoPlayedForRef.current === key) return;
     const timeout = setTimeout(() => {
       autoPlayedForRef.current = key;
-      startReadingFromVerse(initialVerseNumber);
+      void stop();
+      void narration.playFromVerse(initialVerseNumber);
     }, 400);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allWords, initialVerseNumber, bookName, chapterNumber]);
+  }, [allWords, initialVerseNumber, bookName, chapterNumber, narration.available]);
 
-  // Auto-scroll to verse helper
+  useEffect(() => {
+    if (narration.activeVerseNumber == null) return;
+    const index = verses.findIndex(
+      (verse) => verse.verseNumber === narration.activeVerseNumber
+    );
+    if (index >= 0) scrollToVerse(index);
+  }, [narration.activeVerseNumber, verses]);
+
   const scrollToVerse = (verseIndex: number) => {
     if (flatListRef.current && verseIndex >= 0 && verseIndex < verses.length) {
       flatListRef.current.scrollToIndex({
         index: verseIndex,
-        animated: true,
-        viewPosition: 0.3, // Show verse near top
+        animated: false,
+        viewPosition: 0.28,
       });
     }
   };
@@ -222,12 +264,31 @@ export default function BibleReader({
 
   // Get full text of all verses for TTS (must match allWords structure)
   const getFullText = () => {
-    // Use the same word splitting logic to ensure perfect alignment
-    return allWords.map((wp) => wp.word).join(" ");
+    return allWords
+      .map((wp, index) => {
+        const next = allWords[index + 1];
+        const verseEnded = !next || next.verseIndex !== wp.verseIndex;
+        return markBreathAtBoundary(wp.word, verseEnded);
+      })
+      .join(" ");
   };
 
   // Handle play/pause
+  const usingNarration = narration.available;
+  const showTransport = usingNarration
+    ? narration.hasStarted
+    : isSpeaking ||
+      isPaused ||
+      (currentWordIndex > 0 && currentWordIndex < allWords.length);
+  const transportPaused = usingNarration ? narration.isPaused : isPaused;
+  const playbackRate = usingNarration ? narration.rate : rate;
+
   const handlePlayPause = async () => {
+    if (usingNarration) {
+      if (narration.preparing) return;
+      await narration.togglePlayback(initialVerseNumber || 1);
+      return;
+    }
     if (!isSpeaking && !isPaused) {
       // Ensure words are mapped before speaking
       if (allWords.length === 0) {
@@ -245,6 +306,34 @@ export default function BibleReader({
     }
   };
 
+  const voiceMenu = useMemo(() => {
+    if (narration.available) {
+      return {
+        voices: narration.readers.map((reader) => ({
+          id: reader.id,
+          name: reader.name,
+          description: "Narrator",
+        })),
+        selectedId: narration.readerId,
+        onSelect: narration.setReader,
+      };
+    }
+    return null;
+  }, [
+    narration.available,
+    narration.readerId,
+    narration.readers,
+    narration.setReader,
+  ]);
+  const voiceMenuRef = useRef(onVoiceMenu);
+  voiceMenuRef.current = onVoiceMenu;
+  useEffect(() => {
+    voiceMenuRef.current?.(voiceMenu);
+  }, [voiceMenu]);
+  useEffect(() => {
+    return () => voiceMenuRef.current?.(null);
+  }, []);
+
   // Start reading aloud from a specific verse rather than the top of the
   // chapter - used when the user picks a verse from the verse selector.
   const startReadingFromVerse = async (verseNumber: number) => {
@@ -256,7 +345,11 @@ export default function BibleReader({
     playbackOffsetRef.current = offset;
     const textFromVerse = allWords
       .slice(offset)
-      .map((wp) => wp.word)
+      .map((wp, index, slice) => {
+        const next = slice[index + 1];
+        const verseEnded = !next || next.verseIndex !== wp.verseIndex;
+        return markBreathAtBoundary(wp.word, verseEnded);
+      })
       .join(" ");
     if (!textFromVerse) return;
     console.log(`🎙️ Speaking from verse ${verseNumber} (word ${offset})`);
@@ -265,21 +358,86 @@ export default function BibleReader({
 
   // Handle stop
   const handleStop = () => {
+    if (usingNarration) {
+      void narration.stop();
+    }
     stop();
     playbackOffsetRef.current = 0;
     setCurrentWordPosition(null);
   };
 
+  const onVersePress = (verseNumber: number) => {
+    const now = Date.now();
+    const doubleTap = now - lastVerseTapAt.current < 320;
+    lastVerseTapAt.current = now;
+    if (verseTapTimer.current) {
+      clearTimeout(verseTapTimer.current);
+      verseTapTimer.current = null;
+    }
+    if (doubleTap) {
+      toggleTopControls();
+      return;
+    }
+    verseTapTimer.current = setTimeout(() => {
+      verseTapTimer.current = null;
+      if (Date.now() - chromeTapAt.current < 400) return;
+      if (narration.available) {
+        void stop();
+        void narration.playFromVerse(verseNumber);
+        return;
+      }
+      void startReadingFromVerse(verseNumber);
+    }, 320);
+  };
+
+  const slower = () => {
+    const next = Math.max(0.5, playbackRate - 0.25);
+    if (usingNarration) void narration.setRate(next);
+    else setRate(next);
+  };
+  const faster = () => {
+    const next = Math.min(2, playbackRate + 0.25);
+    if (usingNarration) void narration.setRate(next);
+    else setRate(next);
+  };
+
   const renderVerse = ({ item, index }: { item: BibleVerse; index: number }) => {
-    const words = item.text.split(/\s+/).filter((w) => w.length > 0);
-    const isCurrentVerse = currentWordPosition?.verseIndex === index;
+    const spoken =
+      usingNarration && narration.hasStarted
+        ? narration.spokenVerses.find(
+            (verse) => verse.verseNumber === item.verseNumber
+          )?.text
+        : null;
+    const words = (spoken || item.text).split(/\s+/).filter((w) => w.length > 0);
+    const narrationVerse =
+      usingNarration && narration.activeVerseNumber === item.verseNumber;
+    const isCurrentVerse =
+      narrationVerse || currentWordPosition?.verseIndex === index;
+    const verseType = {
+      fontFamily: reading.fontFamily,
+      fontSize: reading.fontSize,
+      lineHeight: reading.lineHeight,
+    };
 
     return (
-      <View style={styles.verseContainer}>
-        <Text style={styles.verseNumber}>{item.verseNumber}</Text>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={() => onVersePress(item.verseNumber)}
+        style={[styles.verseContainer, narrationVerse && styles.narrationVerse]}
+      >
+        <Text
+          style={[
+            styles.verseNumber,
+            narrationVerse && styles.verseNumberActive,
+            { fontSize: Math.max(12, reading.fontSize - 5) },
+          ]}
+        >
+          {item.verseNumber}
+        </Text>
         <View style={styles.verseTextContainer}>
           {words.map((word, wordIndex) => {
             const isHighlighted =
+              !usingNarration &&
               isCurrentVerse &&
               currentWordPosition?.wordIndex === wordIndex;
 
@@ -288,6 +446,7 @@ export default function BibleReader({
                 key={`${index}-${wordIndex}`}
                 style={[
                   styles.verseWord,
+                  verseType,
                   isHighlighted && styles.highlightedWord,
                 ]}
               >
@@ -296,7 +455,7 @@ export default function BibleReader({
             );
           })}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -337,150 +496,20 @@ export default function BibleReader({
   return (
     <View style={styles.container}>
       {/* Floating Audio Controls at Top with Glass Background */}
-      {verses.length > 0 && (
-        <View style={styles.floatingPlayContainer}>
-          <View style={styles.topBarRow}>
-            {Platform.OS !== "web" ? (
-              <Animated.View style={{ transform: [{ translateX: topSlideX }] }}>
-                <BlurView intensity={80} tint="light" style={styles.glassBar}>
-                  <View style={styles.glassBarContent}>
-                  {/* Show full controls when playing/paused, or just play button when idle */}
-                  {isSpeaking || isPaused || (currentWordIndex > 0 && currentWordIndex < allWords.length) ? (
-                    <View style={styles.controlsRow}>
-                      <View style={styles.controlsLeft}>
-                        <TouchableOpacity
-                          style={styles.controlButton}
-                          onPress={handleStop}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="stop" size={20} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.controlsCenter}>
-                        <View style={styles.speedControlsCenter}>
-                          <TouchableOpacity
-                            style={styles.speedButtonSmall}
-                            onPress={() => setRate(Math.max(0.5, rate - 0.25))}
-                          >
-                            <Text style={styles.speedTextSmall}>−</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.speedValueDisplay}>{rate.toFixed(1)}x</Text>
-                          <TouchableOpacity
-                            style={styles.speedButtonSmall}
-                            onPress={() => setRate(Math.min(2.0, rate + 0.25))}
-                          >
-                            <Text style={styles.speedTextSmall}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                      <View style={styles.controlsRight}>
-                        <TouchableOpacity
-                          style={styles.controlButtonRight}
-                          onPress={handlePlayPause}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name={isPaused ? "play" : "pause"}
-                              size={24}
-                              color="#FFFFFF"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    /* Just Play Button when idle - center perfectly with spacers */
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                      <View style={{ width: 40 }} />
-                      <View style={{ alignItems: "center", justifyContent: "center" }}>
-                        <TouchableOpacity
-                          style={styles.controlButtonRight}
-                          onPress={handlePlayPause}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="play" size={24} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={{ width: 40 }} />
-                    </View>
-                  )}
-                  </View>
-                </BlurView>
-              </Animated.View>
-            ) : (
-              <Animated.View style={{ transform: [{ translateX: topSlideX }] }}>
-                <View style={[styles.glassBar, styles.glassBarWeb]}>
-                  <View style={styles.glassBarContent}>
-                  {isSpeaking || isPaused || (currentWordIndex > 0 && currentWordIndex < allWords.length) ? (
-                    <View style={styles.controlsRow}>
-                      <View style={styles.controlsLeft}>
-                        <TouchableOpacity
-                          style={styles.controlButton}
-                          onPress={handleStop}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="stop" size={20} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.controlsCenter}>
-                        <View style={styles.speedControlsCenter}>
-                          <TouchableOpacity
-                            style={styles.speedButtonSmall}
-                            onPress={() => setRate(Math.max(0.5, rate - 0.25))}
-                          >
-                            <Text style={styles.speedTextSmall}>−</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.speedValueDisplay}>{rate.toFixed(1)}x</Text>
-                          <TouchableOpacity
-                            style={styles.speedButtonSmall}
-                            onPress={() => setRate(Math.min(2.0, rate + 0.25))}
-                          >
-                            <Text style={styles.speedTextSmall}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                      <View style={styles.controlsRight}>
-                        <TouchableOpacity
-                          style={styles.controlButtonRight}
-                          onPress={handlePlayPause}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name={isPaused ? "play" : "pause"}
-                              size={24}
-                              color="#FFFFFF"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <TouchableOpacity
-                        style={styles.controlButtonRight}
-                        onPress={handlePlayPause}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="play" size={24} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-            {/* Arrow removed; double-tap anywhere to toggle */}
-          </View>
-        </View>
-      )}
 
       <View style={{ flex: 1 }}>
         <TapGestureHandler numberOfTaps={2} onActivated={toggleTopControls}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1 }} collapsable={false}>
             <FlatList
               ref={flatListRef}
               data={verses}
               renderItem={renderVerse}
               keyExtractor={(item) => item._id}
-              contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
+              extraData={`${narration.activeVerseNumber ?? ""}-${reading.fontId}-${reading.fontSize}`}
+              contentContainerStyle={[
+                styles.versesContainer,
+                { paddingTop: chromeVisible ? 100 : 16 },
+              ]}
               showsVerticalScrollIndicator={false}
               ListFooterComponent={renderNavigationControls}
               onScrollToIndexFailed={(info) => {
@@ -496,6 +525,197 @@ export default function BibleReader({
           </View>
         </TapGestureHandler>
       </View>
+      {chromeVisible && verses.length > 0 && (
+        <View style={styles.floatingPlayContainer}>
+          <View style={styles.topBarRow}>
+            <View>
+            {!isTopHidden ? (
+            <TouchableOpacity
+              style={styles.cardClose}
+              onPress={() => {
+                slideTop(true);
+                onChromeChange?.(true);
+              }}
+              accessibilityLabel="Close player"
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={16} color="#1F2937" />
+            </TouchableOpacity>
+            ) : null}
+            {Platform.OS !== "web" ? (
+              <Animated.View
+                pointerEvents={isTopHidden ? "none" : "auto"}
+                style={{ transform: [{ translateX: topSlideX }] }}
+              >
+                <View style={styles.glassBar}>
+                  <BlurView
+                    pointerEvents="none"
+                    intensity={80}
+                    tint="light"
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.glassBarContent}>
+                  {/* Show full controls when playing/paused, or just play button when idle */}
+                  {showTransport ? (
+                    <View style={styles.controlsRow}>
+                      <View style={styles.controlsLeft}>
+                        <TouchableOpacity
+                          style={styles.controlButton}
+                          onPress={handleStop}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="stop" size={20} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.controlsCenter}>
+                        <View style={styles.speedControlsCenter}>
+                          <TouchableOpacity
+                            style={styles.speedButtonSmall}
+                            onPress={slower}
+                          >
+                            <Text style={styles.speedTextSmall}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.speedValueDisplay}>{playbackRate.toFixed(1)}x</Text>
+                          <TouchableOpacity
+                            style={styles.speedButtonSmall}
+                            onPress={faster}
+                          >
+                            <Text style={styles.speedTextSmall}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={styles.controlsRight}>
+                        <TouchableOpacity
+                          style={styles.controlButtonRight}
+                          onPress={handlePlayPause}
+                          activeOpacity={0.8}
+                        >
+                          {narration.preparing ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                          ) : (
+                            <Ionicons
+                              name={transportPaused ? "play" : "pause"}
+                              size={24}
+                              color="#FFFFFF"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    /* Just Play Button when idle - center perfectly with spacers */
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                      <View style={{ width: 40 }} />
+                      <View style={{ alignItems: "center", justifyContent: "center" }}>
+                        <TouchableOpacity
+                          style={styles.controlButtonRight}
+                          onPress={handlePlayPause}
+                          activeOpacity={0.8}
+                        >
+                          {narration.preparing ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                          ) : (
+                            <Ionicons name="play" size={24} color="#FFFFFF" />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{ width: 40 }} />
+                    </View>
+                  )}
+                  </View>
+                </View>
+              </Animated.View>
+            ) : (
+              <Animated.View
+                pointerEvents={isTopHidden ? "none" : "auto"}
+                style={{
+                  transform: [{ translateX: topSlideX }],
+                  opacity: isTopHidden ? 0 : 1,
+                }}
+              >
+                <View style={[styles.glassBar, styles.glassBarWeb]}>
+                  <View style={styles.glassBarContent}>
+                  {showTransport ? (
+                    <View style={styles.controlsRow}>
+                      <View style={styles.controlsLeft}>
+                        <TouchableOpacity
+                          style={styles.controlButton}
+                          onPress={handleStop}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="stop" size={20} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.controlsCenter}>
+                        <View style={styles.speedControlsCenter}>
+                          <TouchableOpacity
+                            style={styles.speedButtonSmall}
+                            onPress={slower}
+                          >
+                            <Text style={styles.speedTextSmall}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.speedValueDisplay}>{playbackRate.toFixed(1)}x</Text>
+                          <TouchableOpacity
+                            style={styles.speedButtonSmall}
+                            onPress={faster}
+                          >
+                            <Text style={styles.speedTextSmall}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={styles.controlsRight}>
+                        <TouchableOpacity
+                          style={styles.controlButtonRight}
+                          onPress={handlePlayPause}
+                          activeOpacity={0.8}
+                        >
+                          {narration.preparing ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                          ) : (
+                            <Ionicons
+                              name={transportPaused ? "play" : "pause"}
+                              size={24}
+                              color="#FFFFFF"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <TouchableOpacity
+                        style={styles.controlButtonRight}
+                        onPress={handlePlayPause}
+                        activeOpacity={0.8}
+                      >
+                        {narration.preparing ? (
+                          <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                          <Ionicons name="play" size={24} color="#FFFFFF" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+            </View>
+          </View>
+          {isTopHidden ? (
+            <TouchableOpacity
+              style={styles.reopenPlayer}
+              onPress={() => {
+                slideTop(false);
+                onChromeChange?.(false);
+              }}
+              accessibilityLabel="Show player"
+            >
+              <Ionicons name="play" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
 
       {/* bottom prev/next removed */}
     </View>
@@ -513,7 +733,8 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     alignItems: "center",
-    zIndex: 20,
+    zIndex: 30,
+    elevation: 30,
   },
   // bottom nav removed
   glassBar: {
@@ -551,6 +772,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  cardClose: {
+    position: "absolute",
+    right: -4,
+    top: -8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 30,
+  },
+  reopenPlayer: {
+    marginTop: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#256E63",
+    alignItems: "center",
+    justifyContent: "center",
   },
   inlineSlideToggle: {
     position: "absolute",
@@ -671,6 +915,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 16,
     paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  narrationVerse: {
+    backgroundColor: "#FDE68A",
+  },
+  verseNumberActive: {
+    color: "#92400E",
   },
   verseNumber: {
     fontSize: 12,

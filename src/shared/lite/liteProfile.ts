@@ -4,7 +4,6 @@
  * Client owns RAM: page size, prefetch, player window, image budget.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Dimensions, PixelRatio, Platform } from "react-native";
 import { appMmkv } from "../cache/mmkvStorage";
 import { isLiteAppBuild } from "../config/appVariant";
 
@@ -12,40 +11,17 @@ export type LiteMode = "auto" | "on" | "off";
 
 const STORAGE_KEY = "jevah_lite_mode_v1";
 const MMKV_LITE_KEY = "jevah_lite_mode_v1";
-const LITE_RAM_BYTES = 2.5 * 1024 ** 3;
 
 let mode: LiteMode = "auto";
 let hydrated = false;
 let cachedActive: boolean | null = null;
 const listeners = new Set<(active: boolean, mode: LiteMode) => void>();
 
-/** Heuristic when mode === auto (no expo-device required). */
+/**
+ * Auto lite used to treat most Androids as low-end (smaller pages, posters,
+ * fewer players). The feed matches iPhone unless the user turns lite on.
+ */
 export function detectLowEndAndroid(): boolean {
-  if (Platform.OS !== "android") return false;
-
-  try {
-    // Optional: expo-device totalMemory when native module is present
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Device = require("expo-device");
-    const mem = Device?.totalMemory;
-    if (typeof mem === "number" && mem > 0 && mem < LITE_RAM_BYTES) {
-      return true;
-    }
-  } catch {
-    // package optional
-  }
-
-  const { width, height } = Dimensions.get("window");
-  const pr = PixelRatio.get();
-  const api =
-    typeof Platform.Version === "number"
-      ? Platform.Version
-      : parseInt(String(Platform.Version), 10) || 99;
-
-  // Small / older Androids are the usual 2GB class
-  if (api <= 28) return true;
-  if (width <= 360 && height <= 720) return true;
-  if (pr <= 1.5 && width < 400) return true;
   return false;
 }
 

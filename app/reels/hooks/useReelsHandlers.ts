@@ -33,6 +33,7 @@ import {
 } from "../../components/commentSheetAnchor";
 import type { CommentCreatorInfo } from "../../context/commentModalTypes";
 import { resolveSaveSeed } from "../../../src/shared/hooks/useContentSaveState";
+import { buildContentShareFromItem } from "../../../src/shared/share/contentShare";
 
 export interface UseReelsHandlersParams {
   router: ReturnType<typeof useRouter>;
@@ -402,12 +403,12 @@ export function useReelsHandlers({
   const handleShare = useCallback(
     async (key: string) => {
       try {
-        const shareOptions = {
-          title: currentVideo.title,
-          message: `Check out this video: ${currentVideo.title}`,
-          url: currentVideo.fileUrl || currentVideo.imageUrl || imageUrl,
-        };
-        const result = await Share.share(shareOptions);
+        const result = await Share.share(
+          buildContentShareFromItem(
+            currentVideo,
+            currentVideo._id || contentIdForHooks
+          )
+        );
         if (result.action === Share.sharedAction) {
           const contentId = currentVideo._id || contentIdForHooks;
           if (contentId) {
@@ -426,7 +427,7 @@ export function useReelsHandlers({
         setMenuVisible(false);
       }
     },
-    [currentVideo, imageUrl, contentIdForHooks, activeContentType, setMenuVisible]
+    [currentVideo, contentIdForHooks, activeContentType, setMenuVisible]
   );
 
   const handleDownloadAction = useCallback(async () => {
@@ -456,9 +457,8 @@ export function useReelsHandlers({
   ]);
 
   const handleViewDetails = useCallback(() => {
-    setMenuVisible(false);
     setShowDetailsModal(true);
-  }, [setMenuVisible, setShowDetailsModal]);
+  }, [setShowDetailsModal]);
 
   const handleDeleteConfirm = useCallback(async () => {
     await handleDeleteConfirmInternal();
@@ -467,7 +467,7 @@ export function useReelsHandlers({
 
   const handleReport = useCallback(() => {
     setMenuVisible(false);
-    setTimeout(() => setShowReportModal(true), 300);
+    setShowReportModal(true);
   }, [setMenuVisible, setShowReportModal]);
 
   return {

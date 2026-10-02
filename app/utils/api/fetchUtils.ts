@@ -11,8 +11,8 @@ export async function enhancedFetch(
     method = "GET",
     body,
     headers = {},
-    retryCount = 3,
-    timeout = 8000, // Reduced timeout for faster response
+    retryCount = 2,
+    timeout = 20000,
   } = options;
 
   PerformanceMonitor.startTimer(`fetch-${method}-${url}`);
@@ -63,4 +63,3 @@ export async function enhancedFetch(
 
   throw lastError!;
 }
-

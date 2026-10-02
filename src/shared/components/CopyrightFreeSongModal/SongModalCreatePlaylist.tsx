@@ -2,8 +2,18 @@
  * SongModalCreatePlaylist - Create new playlist form
  */
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Modal, Text, TextInput, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Keyboard,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { UI_CONFIG } from "@/shared/constants";
 
 export interface SongModalCreatePlaylistProps {
@@ -27,6 +37,41 @@ export function SongModalCreatePlaylist({
   onCreate,
   onCancel,
 }: SongModalCreatePlaylistProps) {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardHeight(0);
+      return;
+    }
+    const metrics = Keyboard.metrics();
+    if (metrics?.height) setKeyboardHeight(metrics.height);
+  }, [visible]);
+
+  const lifted = Platform.OS === "ios" && keyboardHeight > 0;
+
+  useEffect(() => {
+    if (!lifted) return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [lifted, keyboardHeight]);
+
   return (
     <Modal
       visible={visible}
@@ -34,26 +79,41 @@ export function SongModalCreatePlaylist({
       animationType="fade"
       onRequestClose={onCancel}
     >
+    <View style={{ flex: 1, backgroundColor: "rgba(0, 0, 0, 0.7)" }}>
+    <ScrollView
+      ref={scrollRef}
+      keyboardShouldPersistTaps="handled"
+      bounces={false}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: lifted ? "flex-end" : "center",
+        alignItems: "center",
+        paddingHorizontal: 24,
+        paddingTop: lifted ? 16 : 40,
+        paddingBottom: lifted ? keyboardHeight + 16 : 40,
+      }}
+    >
     <TouchableOpacity
       activeOpacity={1}
       onPress={onCancel}
       style={{
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.7)",
-        justifyContent: "center",
-        alignItems: "center",
-        paddingHorizontal: 24,
-        paddingVertical: 40,
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
       }}
-    >
+    />
       <TouchableOpacity
         activeOpacity={1}
         onPress={(e) => e.stopPropagation()}
         style={{
           backgroundColor: "#FFFFFF",
           borderRadius: 24,
-          width: "100%",
+          alignSelf: "stretch",
           maxWidth: 420,
+          zIndex: 1,
           paddingTop: 28,
           paddingBottom: 24,
           paddingHorizontal: 24,
@@ -206,19 +266,35 @@ export function SongModalCreatePlaylist({
               elevation: 4,
             }}
           >
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: "PlusJakartaSans-SemiBold",
-                color: "#FFFFFF",
-              }}
-            >
-              {isLoading ? "Creating..." : "Create"}
-            </Text>
+            {isLoading ? (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontFamily: "PlusJakartaSans-SemiBold",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  Creating...
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontFamily: "PlusJakartaSans-SemiBold",
+                  color: "#FFFFFF",
+                }}
+              >
+                Create
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </ScrollView>
+    </View>
     </Modal>
   );
 }

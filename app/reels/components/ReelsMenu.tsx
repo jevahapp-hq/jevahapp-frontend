@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import React, { useEffect } from "react";
 import {
   Modal,
+  Platform,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -13,7 +14,6 @@ import Animated, {
   useSharedValue,
   withTiming,
   Easing,
-  runOnJS,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UI_CONFIG } from "../../../src/shared/constants";
@@ -56,6 +56,20 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
   // Keep mounted during exit animation
   const [mounted, setMounted] = React.useState(visible);
   const progress = useSharedValue(0);
+  const pendingAfterClose = React.useRef<(() => void) | null>(null);
+
+  const flushPending = () => {
+    const next = pendingAfterClose.current;
+    if (!next) return;
+    pendingAfterClose.current = null;
+    next();
+  };
+
+  /** iPhone drops a second modal if it opens before this sheet has finished closing. */
+  const queueAfterClose = (action: () => void) => {
+    pendingAfterClose.current = action;
+    onClose();
+  };
 
   useEffect(() => {
     if (visible) {
@@ -64,15 +78,19 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
         duration: 200,
         easing: Easing.out(Easing.cubic),
       });
-    } else if (mounted) {
-      progress.value = withTiming(
-        0,
-        { duration: 90, easing: Easing.in(Easing.cubic) },
-        (finished) => {
-          if (finished) runOnJS(setMounted)(false);
-        }
-      );
+      return;
     }
+    if (!mounted) return;
+    progress.value = withTiming(0, {
+      duration: 90,
+      easing: Easing.in(Easing.cubic),
+    });
+    if (Platform.OS === "ios") return;
+    const timer = setTimeout(() => {
+      setMounted(false);
+      flushPending();
+    }, 320);
+    return () => clearTimeout(timer);
   }, [visible, mounted, progress]);
 
   const dismissInstant = () => {
@@ -97,7 +115,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
   const save = useContentSaveState(saveId, currentVideo);
   const isSaved = save.saved;
 
-  if (!mounted) return null;
+  if (!visible && !mounted) return null;
 
   const isDownloaded = checkIfDownloaded(currentVideo?._id || modalKey);
 
@@ -162,11 +180,15 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
 
   return (
     <Modal
-      visible={mounted}
+      visible={visible}
       transparent
       animationType="none"
       statusBarTranslucent
       onRequestClose={onClose}
+      onDismiss={() => {
+        setMounted(false);
+        flushPending();
+      }}
     >
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         {/* Backdrop — tap to close */}
@@ -247,7 +269,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
             <MenuItem
               label="View Details"
               icon="information-circle-outline"
-              onPress={onViewDetails}
+              onPress={() => queueAfterClose(onViewDetails)}
             />
 
             <MenuItem
@@ -268,7 +290,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
             <MenuItem
               label="Share"
               icon="share-social-outline"
-              onPress={() => onShare(modalKey)}
+              onPress={() => queueAfterClose(() => onShare(modalKey))}
             />
 
             <View
@@ -283,17 +305,14 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
               <MenuItem
                 label="Delete"
                 icon="trash-outline"
-                onPress={() => {
-                  dismissInstant();
-                  setTimeout(() => onDelete(), 400);
-                }}
+                onPress={() => queueAfterClose(onDelete)}
                 isDestructive
               />
             ) : (
               <MenuItem
                 label="Report"
                 icon="flag-outline"
-                onPress={onReport}
+                onPress={() => queueAfterClose(onReport)}
                 isDestructive
               />
             )}

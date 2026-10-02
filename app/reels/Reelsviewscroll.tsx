@@ -4,49 +4,67 @@
  */
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, StatusBar, StyleSheet, View } from "react-native";
+import Animated, {
+  runOnJS,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from "react-native-reanimated";
+import {
+  useFullscreenBackInterceptor,
+} from "../../src/features/media/video-feed";
+import { suspendFeedDecoders } from "../../src/features/media/video-feed/feedDecoderGate";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
-import { useFullscreenBackInterceptor } from "../../src/features/media/video-feed";
+import { dismissReadingNarration } from "../../src/shared/audio/dismissReadingNarration";
 import { ReelsDescriptionEditor } from "./components/ReelsDescriptionEditor";
 import { ReelsErrorView } from "./components/ReelsErrorView";
 import { ReelsModals } from "./components/ReelsModals";
 import { ReelsVideoItem } from "./components/ReelsVideoItem";
-import { useReelsOrchestrator } from "./hooks/useReelsOrchestrator";
+import { markReelTouchMoved, registerReelScrollGuard } from "./reelAudible";
 import SuccessCard from "../components/SuccessCard";
 
 const ReelsView = () => {
   const o = useReelsOrchestrator();
   const flatListRef = useRef<FlatList>(null);
+  const landedRef = useRef(false);
   const initialIndex = Math.max(0, o.currentIndex_state || 0);
-  const [viewport, setViewport] = useState({
-    width: o.responsive.screenWidth,
-    height: o.responsive.screenHeight,
-  });
-  const cellWidth = viewport.width || o.responsive.screenWidth;
-  const cellHeight = viewport.height || o.responsive.screenHeight;
+  const cellHeightSv = useSharedValue(0);
+  const countSv = useSharedValue(0);
+  const lastIndexSv = useSharedValue(-1);
+  const openingIndexSv = useSharedValue(0);
+  const armedSv = useSharedValue(0);
+  const prevOffsetSv = useSharedValue(0);
+  const scrollGuardSv = useSharedValue(0);
+  const openingCapturedRef = useRef(false);
+  // Window height is taller than the list on Android, so sizing cells from
+  // it shoved the video and title under the bottom nav, then a later layout
+  // pass jumped the pager into the black gap between pages.
+  const [viewport, setViewport] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const cellWidth = viewport?.width || o.responsive.screenWidth;
+  const cellHeight = viewport?.height || 0;
 
-  const onListLayout = useCallback(
+  const onScreenLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
       const { width, height } = event.nativeEvent.layout;
       if (!(width > 0) || !(height > 0)) return;
-      setViewport((prev) =>
-        Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
-          ? prev
-          : { width, height }
-      );
+      setViewport((prev) => prev ?? { width, height });
     },
     []
   );
 
-  // Land on the opened video once the list/layout is ready. Do not depend on
-  // currentIndex — swipe updates would fight the pager.
+  // Land once, after the list has its real height. Repeating this on every
+  // height tweak snapped the pager off the video and left a black screen.
   useEffect(() => {
-    if (!flatListRef.current || o.allVideos.length === 0) return;
+    if (!viewport || landedRef.current || o.allVideos.length === 0) return;
     const pending = o.pendingStartIndexRef?.current;
     const index = Math.min(
       Math.max(0, pending ?? o.currentIndex_state),
       o.allVideos.length - 1
     );
+    landedRef.current = true;
     requestAnimationFrame(() => {
       try {
         flatListRef.current?.scrollToIndex({
@@ -56,15 +74,87 @@ const ReelsView = () => {
       } catch {
         /* getItemLayout may not be ready yet */
       }
-    });
-    const unlock = setTimeout(() => {
       if (o.pendingStartIndexRef) o.pendingStartIndexRef.current = null;
-    }, 1000);
-    return () => clearTimeout(unlock);
-  }, [o.allVideos.length, cellHeight]);
+    });
+  }, [viewport, o.allVideos.length, o.currentIndex_state, o.pendingStartIndexRef]);
 
   // Hardware back exits fullscreen before the root app-exit prompt.
   useFullscreenBackInterceptor(o.handlers.handleBackNavigation);
+
+  useEffect(() => {
+    dismissReadingNarration();
+    // Feed cards must release their decoders before this screen creates any.
+    suspendFeedDecoders();
+  }, []);
+
+  const commitVisibleIndex = o.scroll.commitVisibleIndex;
+  const commitIndex = useCallback(
+    (index: number) => {
+      commitVisibleIndex(index);
+    },
+    [commitVisibleIndex]
+  );
+
+  useEffect(() => {
+    cellHeightSv.value = cellHeight;
+    countSv.value = o.allVideos.length;
+    if (!openingCapturedRef.current && cellHeight > 0 && o.allVideos.length > 0) {
+      openingCapturedRef.current = true;
+      const opening = Math.min(
+        Math.max(0, o.currentIndex_state || 0),
+        o.allVideos.length - 1
+      );
+      openingIndexSv.value = opening;
+      prevOffsetSv.value = opening * cellHeight;
+    }
+  }, [
+    cellHeight,
+    cellHeightSv,
+    countSv,
+    o.allVideos.length,
+    o.currentIndex_state,
+    openingIndexSv,
+    prevOffsetSv,
+  ]);
+
+  useEffect(() => {
+    return registerReelScrollGuard(() => {
+      scrollGuardSv.value = 0;
+    });
+  }, [scrollGuardSv]);
+
+  const onReelScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        const height = cellHeightSv.value;
+        const count = countSv.value;
+        if (!(height > 0) || !(count > 0)) return;
+        const offsetY = event.contentOffset.y;
+        const opening = openingIndexSv.value;
+        if (armedSv.value === 0) {
+          const nearOpening = Math.abs(offsetY - opening * height) < height * 0.35;
+          const nearZero = Math.abs(offsetY) < height * 0.35;
+          // The list reports 0 before scrollToIndex lands on the opened reel.
+          if (opening > 0 && nearZero && !nearOpening) return;
+          armedSv.value = 1;
+        }
+        const page = offsetY / height;
+        const index = Math.max(0, Math.min(count - 1, Math.round(page)));
+        if (
+          scrollGuardSv.value === 0 &&
+          Math.abs(offsetY - prevOffsetSv.value) > 8
+        ) {
+          scrollGuardSv.value = 1;
+          runOnJS(markReelTouchMoved)();
+        }
+        prevOffsetSv.value = offsetY;
+        if (index === lastIndexSv.value) return;
+        lastIndexSv.value = index;
+        runOnJS(commitIndex)(index);
+      },
+    },
+    [commitIndex]
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => {
@@ -160,8 +250,9 @@ const ReelsView = () => {
         backgroundColor="transparent"
         translucent
       />
-      <View style={styles.screen}>
-      <FlatList
+      <View style={styles.screen} onLayout={onScreenLayout}>
+      {viewport && cellHeight > 0 ? (
+      <Animated.FlatList
         ref={flatListRef}
         data={o.allVideos}
         extraData={`${o.currentIndex_state}:${cellHeight}:${cellWidth}:${o.activeIsLiked}:${o.activeIsSaved}`}
@@ -170,9 +261,7 @@ const ReelsView = () => {
         pagingEnabled
         scrollEnabled={!o.isDragging}
         showsVerticalScrollIndicator={false}
-        onLayout={onListLayout}
-        onViewableItemsChanged={o.scroll.onViewableItemsChanged}
-        viewabilityConfig={o.scroll.viewabilityConfig}
+        viewabilityConfigCallbackPairs={o.scroll.viewabilityConfigCallbackPairs as any}
         initialScrollIndex={
           o.allVideos.length > 0
             ? Math.min(initialIndex, o.allVideos.length - 1)
@@ -191,10 +280,14 @@ const ReelsView = () => {
         maxToRenderPerBatch={3}
         windowSize={5}
         decelerationRate="fast"
-        snapToInterval={cellHeight}
-        snapToAlignment="start"
+        disableIntervalMomentum
+        scrollEventThrottle={16}
+        onScroll={onReelScroll}
         style={styles.list}
       />
+      ) : (
+        <View style={styles.list} />
+      )}
 
       <ReelsModals
         currentVideo={o.current.currentVideo}

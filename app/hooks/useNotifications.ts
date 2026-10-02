@@ -36,6 +36,11 @@ import {
   subscribeNotificationRealtime,
   writeNotificationSnapshot,
 } from "@/shared/notifications/notificationQuerySync";
+import { mergeRetainedContentVisible, contentVisibleMediaId } from "@/shared/notifications/contentVisibleNotification";
+import {
+  dropRetainedContentVisible,
+  loadRetainedContentVisible,
+} from "@/shared/notifications/contentVisibleStore";
 
 const NOTIFICATION_STALE_MS = 20 * 1000;
 const NOTIFICATION_GC_MS = 30 * 60 * 1000;
@@ -96,6 +101,17 @@ export const useNotifications = (): UseNotificationsReturn => {
         response.unreadCount,
         localItems
       );
+      const retained = page === 1 ? await loadRetainedContentVisible() : [];
+      const merged = mergeRetainedContentVisible(
+        reconciled.notifications,
+        retained
+      );
+      if (page === 1) {
+        await dropRetainedContentVisible(
+          items.map((item) => contentVisibleMediaId(item)).filter(Boolean)
+        );
+      }
+      const unreadCount = reconciled.unreadCount + merged.extraUnread;
 
       if (page === 1) {
         const stats = queryClient.getQueryData<NotificationStatsLike>(
@@ -103,17 +119,17 @@ export const useNotifications = (): UseNotificationsReturn => {
         );
         queryClient.setQueryData(NOTIFICATION_STATS_QUERY_KEY, {
           ...(stats ?? {
-            unread: reconciled.unreadCount,
+            unread: unreadCount,
             total: response.total ?? 0,
             byType: {},
           }),
-          unread: reconciled.unreadCount,
+          unread: unreadCount,
         });
       }
 
       return {
-        notifications: reconciled.notifications,
-        unreadCount: reconciled.unreadCount,
+        notifications: merged.notifications,
+        unreadCount,
         page,
         hasMore: items.length === 20,
       };
@@ -170,6 +186,7 @@ export const useNotifications = (): UseNotificationsReturn => {
           notificationId
         );
       } catch (error) {
+        if (String(notificationId).startsWith("content-visible:")) return;
         patchNotificationQueries(queryClient, (snap) =>
           applyMarkUnread(snap, notificationId)
         );

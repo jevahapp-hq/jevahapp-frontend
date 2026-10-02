@@ -3,37 +3,29 @@
  * Cards are views; play/pause/mute go through useGlobalVideoStore.
  */
 import { MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import type { VideoPlayer } from "expo-video";
-import { MutableRefObject, memo, useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { MutableRefObject, memo, useEffect, useRef, useSyncExternalStore } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import { useVideoPlaybackControl } from "../../../src/shared/hooks/useVideoPlaybackControl";
 import { handleVideoError, isRetryableVideoSourceError } from "../../../src/shared/utils/videoUrlManager";
 import {
+  DarkSnapshotFill,
   FeedVideoSurface,
-  FittedMediaImage,
-  shouldHoldVideoStill,
   useInstantFeedVideoPlayer,
 } from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
-import {
-  snapshotPlayerFrame,
-  useVideoFrameSnapshot,
-} from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
-import { readPlayerCurrentTimeSec } from "../../../src/features/media/video-feed/safeVideoPlayer";
-import { FEED_VIDEO_START_POSITION_SECONDS } from "../../../src/features/media/video-feed/feedVideoConfig";
-import { useReelsStore } from "@/store/useReelsStore";
+import { useFeedVideoAspect, peekFeedVideoAspect } from "../../../src/features/media/video-feed/useFeedVideoAspect";
+import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
+import { reelDisplayFrame, reelFrameNeedsBackdrop } from "../reelFrame";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
-import {
-  getReelsMediaFrame,
-  REELS_CONTENT_FIT,
-} from "../hooks/useReelsResponsive";
+import { androidReelMayHear, getAudibleReel, subscribeAudibleReel } from "../reelAudible";
 
 interface ReelsVideoPlayerProps {
   videoKey: string;
   contentId: string;
   videoUrl: string;
-  posterUri?: string | null;
   screenHeight: number;
   screenWidth: number;
   isActive: boolean;
@@ -58,7 +50,6 @@ const ReelsVideoPlayer = memo(
     videoKey,
     contentId,
     videoUrl,
-    posterUri,
     screenHeight,
     screenWidth,
     isActive,
@@ -104,99 +95,60 @@ const ReelsVideoPlayer = memo(
      */
     const lastPushedPositionRef = useRef(-1);
     const lastPushedDurationRef = useRef(-1);
+    const audibleKey = useSyncExternalStore(
+      subscribeAudibleReel,
+      getAudibleReel,
+      getAudibleReel
+    );
+    const shouldHearRef = useRef(false);
+    shouldHearRef.current =
+      isActive &&
+      isPlaying &&
+      (audibleKey == null
+        ? androidReelMayHear(videoKey)
+        : audibleKey === videoKey);
 
     const {
       player,
       firstFrameReady,
       nativeFirstFrame,
       handleFirstFrameRender,
-      freezeOnFirstFrame,
-      invalidateNativeFirstFrame,
     } = useInstantFeedVideoPlayer({
       source: videoUrl,
       loop: true,
-      restorePlayhead: false,
+      // Seek to the feed playhead before the first paint. Seeking after
+      // the frame is visible clears the surface and leaves Reels black.
+      restorePlayhead: true,
       timeUpdateEventInterval: 0.25,
+      // Only the page on screen may decode. A neighbor that keeps play()
+      // running holds ExoPlayer, so the visible reel stays on a frozen frame.
+      mutedPrime: isActive,
     });
 
     playerRef.current = player;
-    const lastFrame = useVideoFrameSnapshot(videoUrl);
-
+    const measuredAspect = useFeedVideoAspect(player, videoUrl);
+    const fitted = reelDisplayFrame(
+      measuredAspect ?? peekFeedVideoAspect(videoUrl),
+      screenWidth,
+      screenHeight
+    );
+    const showSnapshotBands = reelFrameNeedsBackdrop(
+      fitted,
+      screenWidth,
+      screenHeight
+    );
+    const heldFrame = useVideoFrameSnapshot(videoUrl);
+    const snapshotUri = videoUrl.includes("/upload/")
+      ? `${videoUrl.replace("/upload/", "/upload/so_1/")}.jpg`
+      : null;
+    const frameTop = Math.max(0, Math.round((screenHeight - fitted.height) / 2));
+    const frameLeft = Math.max(0, Math.round((screenWidth - fitted.width) / 2));
     useVideoPlaybackControl({
       videoKey,
       videoRef: playerRef,
       playbackReady: firstFrameReady,
       syncPlayback: false,
     });
-
-    const didApplyResumeRef = useRef(false);
-    const [resumeSeekDone, setResumeSeekDone] = useState(false);
-    useEffect(() => {
-      didApplyResumeRef.current = false;
-      setResumeSeekDone(false);
-    }, [contentId]);
-
-    const pendingResume = useReelsStore((s) => s.resumePlayback);
-    const pendingResumeSec =
-      !resumeSeekDone &&
-      pendingResume?.target === "reels" &&
-      String(pendingResume.contentId) === String(contentId) &&
-      pendingResume.positionMs > 400
-        ? pendingResume.positionMs / 1000
-        : 0;
-    const holdStill = shouldHoldVideoStill({
-      nativeFirstFrame,
-      isSurfaceActive: isActive,
-      pendingResumeSec,
-    });
-
-    // Continuity from feed: wait for a painted frame, then seek. Uncovering
-    // the first t≈0 frame and seeking immediately is the fullscreen black flash.
-    useEffect(() => {
-      if (!player || !isActive || !nativeFirstFrame || didApplyResumeRef.current) {
-        return;
-      }
-      const resume = useReelsStore.getState().resumePlayback;
-      if (
-        !resume ||
-        resume.target !== "reels" ||
-        String(resume.contentId) !== String(contentId) ||
-        !(resume.positionMs > 400)
-      ) {
-        didApplyResumeRef.current = true;
-        setResumeSeekDone(true);
-        return;
-      }
-      didApplyResumeRef.current = true;
-      invalidateNativeFirstFrame();
-      try {
-        const wantMuted = isMuted;
-        const wantVol = isMuted ? 0 : videoVolume;
-        if (player.playing) {
-          player.muted = true;
-          player.volume = 0;
-        }
-        player.currentTime = resume.positionMs / 1000;
-        setLocalPosition(resume.positionMs);
-        setVideoPosition(resume.positionMs);
-        player.muted = wantMuted;
-        player.volume = wantVol;
-        setResumeSeekDone(true);
-      } catch {
-        didApplyResumeRef.current = false;
-        setResumeSeekDone(false);
-      }
-    }, [
-      player,
-      isActive,
-      nativeFirstFrame,
-      contentId,
-      isMuted,
-      videoVolume,
-      setLocalPosition,
-      setVideoPosition,
-      invalidateNativeFirstFrame,
-    ]);
 
     useEffect(() => {
       hasTrackedViewRef.current = false;
@@ -208,20 +160,27 @@ const ReelsVideoPlayer = memo(
       }
       return () => {
         delete videoRefs.current[videoKey];
-        snapshotPlayerFrame(videoUrl, playerRef.current);
       };
-    }, [player, videoKey, videoRefs, videoUrl]);
+    }, [player, videoKey, videoRefs]);
 
     useEffect(() => {
       if (!player) return;
 
       const applyAudibleState = () => {
         try {
-          const shouldHear = isActive && isPlaying;
+          const shouldHear =
+            isActive &&
+            isPlaying &&
+            (audibleKey == null
+              ? androidReelMayHear(videoKey)
+              : audibleKey === videoKey);
           if (!shouldHear) {
-            if (!player.muted) player.muted = true;
-            if ((Number(player.volume) || 0) !== 0) player.volume = 0;
-            if (player.playing && nativeFirstFrame) freezeOnFirstFrame();
+            // Mute does not release ExoPlayer's audio track. A reel that is
+            // no longer the one on screen, or that was tapped to pause, has
+            // to stop or the next page never gets the decoder.
+            player.muted = true;
+            player.volume = 0;
+            if (player.playing) player.pause();
             return;
           }
           const wantMuted = isMuted;
@@ -233,6 +192,16 @@ const ReelsVideoPlayer = memo(
             player.volume = wantVol;
           }
           if (!player.playing) player.play();
+          // ExoPlayer often ignores play() while the reel you left is still
+          // stopping. One more attempt on the next frame starts this page.
+          requestAnimationFrame(() => {
+            if (!shouldHearRef.current) return;
+            try {
+              if (!player.playing) player.play();
+            } catch {
+              // Released native player.
+            }
+          });
         } catch {
           // no-op
         }
@@ -245,26 +214,51 @@ const ReelsVideoPlayer = memo(
       isPlaying,
       isMuted,
       videoVolume,
-      freezeOnFirstFrame,
-      nativeFirstFrame,
+      videoKey,
+      audibleKey,
     ]);
 
-    // Snapshot the paused frame as soon as this reel is no longer active so
-    // scrolling back shows a still instead of a black VideoView.
     useEffect(() => {
-      if (!player || !videoUrl || isActive || !nativeFirstFrame) return;
-      const t = readPlayerCurrentTimeSec(player);
-      snapshotPlayerFrame(
-        videoUrl,
-        player,
-        t > 0 ? t : FEED_VIDEO_START_POSITION_SECONDS
-      );
-    }, [player, videoUrl, isActive, nativeFirstFrame]);
-
-    useEffect(() => {
-      if (!player || !videoUrl || !nativeFirstFrame) return;
-      snapshotPlayerFrame(videoUrl, player);
-    }, [player, videoUrl, nativeFirstFrame]);
+      if (!player) return;
+      let sub: { remove: () => void } | undefined;
+      try {
+        sub = player.addListener("playingChange", ({ isPlaying: nativePlaying }) => {
+          if (nativePlaying) {
+            if (shouldHearRef.current) return;
+            try {
+              player.muted = true;
+              player.volume = 0;
+              player.pause();
+            } catch {
+              // Released native player.
+            }
+            return;
+          }
+          // Android releases the surface when the title and buttons attach,
+          // and ExoPlayer pauses. The reel on screen keeps playing on iPhone.
+          if (!shouldHearRef.current) return;
+          requestAnimationFrame(() => {
+            if (!shouldHearRef.current) return;
+            const audible = getAudibleReel();
+            if (audible && audible !== videoKey) return;
+            try {
+              if (!player.playing) player.play();
+            } catch {
+              // Released native player.
+            }
+          });
+        });
+      } catch {
+        return;
+      }
+      return () => {
+        try {
+          sub?.remove();
+        } catch {
+          // Released native player.
+        }
+      };
+    }, [player]);
 
     useEffect(() => {
       if (!player) return;
@@ -380,66 +374,79 @@ const ReelsVideoPlayer = memo(
       setVideoPosition,
     ]);
 
-    const mediaFrame = getReelsMediaFrame(screenWidth, screenHeight);
     const surfaceStyle = {
       width: screenWidth,
       height: screenHeight,
     };
-
-    const still = (
-      <PosterLayer
-        posterUri={posterUri}
-        lastFrame={lastFrame}
-        width={mediaFrame.width}
-        height={mediaFrame.height}
-      />
-    );
-
-    if (!player) {
-      return (
-        <View style={[styles.host, surfaceStyle]} collapsable={false}>
-          {still}
-        </View>
-      );
-    }
+    const iconSize = getResponsiveSize(50, 60, 70);
+    const iconTop = Math.max(0, Math.round((screenHeight - iconSize) / 2));
 
     return (
-      <View style={[styles.host, surfaceStyle]} collapsable={false}>
-        {still}
-        <FeedVideoSurface
-          player={player}
-          visible
-          height={mediaFrame.height}
-          width={mediaFrame.width}
-          contentFit={REELS_CONTENT_FIT}
-          onFirstFrameRender={handleFirstFrameRender}
-        />
-        {holdStill ? (
-          <View style={styles.stillOverlay} pointerEvents="none">
-            <PosterLayer
-              posterUri={posterUri}
-              lastFrame={lastFrame}
-              width={mediaFrame.width}
-              height={mediaFrame.height}
-            />
-          </View>
+      <View
+        pointerEvents={Platform.OS === "android" ? "none" : "auto"}
+        style={[styles.host, surfaceStyle]}
+        collapsable={false}
+      >
+        {showSnapshotBands && (heldFrame || snapshotUri) ? (
+          <DarkSnapshotFill
+            source={heldFrame || { uri: snapshotUri as string }}
+          />
         ) : null}
+        <View
+          pointerEvents="box-none"
+          collapsable={false}
+          style={{
+            position: "absolute",
+            top: frameTop,
+            left: frameLeft,
+            width: fitted.width,
+            height: fitted.height,
+            overflow: "hidden",
+          }}
+        >
+            {player && fitted.width > 0 && fitted.height > 0 ? (
+              <FeedVideoSurface
+                inline
+                useExoShutter={false}
+                player={player}
+                width={fitted.width}
+                height={fitted.height}
+                contentFit="cover"
+                onFirstFrameRender={handleFirstFrameRender}
+              />
+            ) : null}
+            {!nativeFirstFrame && (heldFrame || snapshotUri) ? (
+              <Image
+                source={heldFrame || { uri: snapshotUri as string }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                pointerEvents="none"
+              />
+            ) : null}
+        </View>
 
-        {isActive && !isPlaying && (
-          <View style={styles.overlay} pointerEvents="none">
+        {isActive && player && nativeFirstFrame && !isPlaying && (
+          <View
+            pointerEvents="none"
+            style={[styles.overlay, { top: iconTop, height: iconSize }]}
+          >
             <MaterialIcons
               name="play-arrow"
-              size={getResponsiveSize(50, 60, 70)}
+              size={iconSize}
               color="rgba(255, 255, 255, 0.6)"
             />
           </View>
         )}
 
-        {isActive && showPauseOverlay && isPlaying && (
-          <View style={styles.overlay} pointerEvents="none">
+        {isActive && player && showPauseOverlay && isPlaying && (
+          <View
+            pointerEvents="none"
+            style={[styles.overlay, { top: iconTop, height: iconSize }]}
+          >
             <MaterialIcons
               name="pause"
-              size={getResponsiveSize(50, 60, 70)}
+              size={iconSize}
               color="rgba(255, 255, 255, 0.6)"
             />
           </View>
@@ -449,7 +456,6 @@ const ReelsVideoPlayer = memo(
   },
   (prev, next) =>
     prev.videoUrl === next.videoUrl &&
-    prev.posterUri === next.posterUri &&
     prev.screenHeight === next.screenHeight &&
     prev.screenWidth === next.screenWidth &&
     prev.isActive === next.isActive &&
@@ -459,62 +465,21 @@ const ReelsVideoPlayer = memo(
     prev.isDragging === next.isDragging
 );
 
-function PosterLayer({
-  posterUri,
-  lastFrame,
-  width,
-  height,
-}: {
-  posterUri?: string | null;
-  lastFrame: ReturnType<typeof useVideoFrameSnapshot>;
-  width: number;
-  height: number;
-}) {
-  if (lastFrame) {
-    return (
-      <FittedMediaImage
-        source={lastFrame}
-        width={width}
-        height={height}
-        contentFit={REELS_CONTENT_FIT}
-        style={styles.stillFill}
-      />
-    );
-  }
-  if (posterUri) {
-    return (
-      <FittedMediaImage
-        uri={posterUri}
-        width={width}
-        height={height}
-        contentFit={REELS_CONTENT_FIT}
-        style={styles.stillFill}
-      />
-    );
-  }
-  return <View style={[styles.stillFill, { width, height }]} />;
-}
-
 export default ReelsVideoPlayer;
 
 const styles = StyleSheet.create({
   host: {
     backgroundColor: "transparent",
     position: "relative",
-  },
-  stillOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 2,
-    elevation: 4,
-    backgroundColor: "#000",
+    overflow: "hidden",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
+    position: "absolute",
+    left: 0,
+    right: 0,
     alignItems: "center",
-    zIndex: 10,
-  },
-  stillFill: {
-    backgroundColor: "#000",
+    justifyContent: "center",
+    zIndex: 30,
+    elevation: 30,
   },
 });

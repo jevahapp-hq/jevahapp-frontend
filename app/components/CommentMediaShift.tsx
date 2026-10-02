@@ -42,9 +42,15 @@ export function CommentMediaShift({ children }: { children: ReactNode }) {
     }
   }, [peeking, mediaShiftY, mediaScale, shiftY, scale]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: shiftY.value }, { scale: scale.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const y = shiftY.value;
+    const s = scale.value;
+    // An identity transform on this parent blocks the iOS back swipe.
+    if (y === 0 && s === 1) return {};
+    return {
+      transform: [{ translateY: y }, { scale: s }],
+    };
+  });
 
   // Always keep the same native child. Swapping View ↔ Animated.View on
   // comment dismiss remounted Home / Reels and jumped away from the video

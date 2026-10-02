@@ -161,6 +161,8 @@ export function performRequest<T = any>(
           if (__DEV__) {
             console.warn(`⚠️ API soft-fail: ${method} ${endpoint}`, msg);
           }
+        } else if (/timeout|aborted/i.test(msg)) {
+          console.warn(`API request timed out: ${method} ${endpoint}`, msg);
         } else {
           console.error(`API request failed: ${method} ${endpoint}`, error);
         }
@@ -169,7 +171,10 @@ export function performRequest<T = any>(
     },
     {
       cacheDuration: cache ? cacheDuration : 0,
-      background: method === "GET", // Run GET requests in background
+      // enhancedFetch allows 20s per try and retries. A 10s wrapper was
+      // aborting profile video loads before that retry finished.
+      timeout: 45000,
+      background: false,
     }
   );
 }

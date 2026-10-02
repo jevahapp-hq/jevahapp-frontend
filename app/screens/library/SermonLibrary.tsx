@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLibraryStore } from "@/store/useLibraryStore";
+import { buildContentShareFromItem } from "../../../src/shared/share/contentShare";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -98,14 +99,7 @@ export default function SermonLibrary() {
 
   const handleShare = async (item: any) => {
     try {
-      await Share.share({
-        title: item.title,
-        message: `Check out this sermon: ${item.title}`,
-        url:
-          typeof item.imageUrl === "string"
-            ? item.imageUrl
-            : item.fileUrl || "",
-      });
+      await Share.share(buildContentShareFromItem(item));
       setMenuOpenId(null);
     } catch (error) {
       console.warn("Share error:", error);

@@ -80,7 +80,8 @@ export function ReelsModals({
       ) : null}
       <DeleteMediaConfirmation
         visible={showDeleteModal}
-        mediaId={currentVideo._id || ""}
+        mediaId={currentVideo._id || currentVideo.id || ""}
+        mediaItem={currentVideo}
         mediaTitle={currentVideo.title || "this video"}
         onClose={onCloseDelete}
         onSuccess={onDeleteSuccess}

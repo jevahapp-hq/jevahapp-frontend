@@ -15,6 +15,7 @@ import { convertToDownloadableItem } from "../../../utils/downloadUtils";
 import { persistStats, persistViewed } from "../../../utils/persistentStorage";
 import { RecommendedItem, VideoCardData } from "../types";
 import { getVideoKey } from "../utils";
+import { buildContentShareFromItem } from "../../../../src/shared/share/contentShare";
 
 interface UseVideoComponentHandlersProps {
   videoStats: Record<string, Partial<VideoCardData>>;
@@ -151,11 +152,9 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
 
   const handleShare = async (key: string, video: VideoCardData) => {
     try {
-      const result = await Share.share({
-        title: video.title,
-        message: `Check out this video: ${video.title}\n${video.fileUrl}`,
-        url: video.fileUrl,
-      });
+      const result = await Share.share(
+        buildContentShareFromItem(video, video._id || key)
+      );
       if (result.action === Share.sharedAction) {
         setVideoStats((prev) => {
           const updated = {

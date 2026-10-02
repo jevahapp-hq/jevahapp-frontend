@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
-import { Text, TouchableOpacity } from "react-native";
+import { Text } from "react-native";
+import { InstantPressable } from "./InstantPressable";
 import { mediaApi } from "../../core/api/MediaApi";
 import { formatCount } from "../utils/formatCount";
 
@@ -133,10 +134,9 @@ const SaveButton: React.FC<SaveButtonProps> = ({
   const iconName = saved ? "bookmark" : "bookmark-outline";
 
   return (
-    <TouchableOpacity
+    <InstantPressable
       onPress={toggleSave}
       disabled={disabled}
-      delayPressIn={0}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -172,7 +172,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
           {formatCount(saveCount)}
         </Text>
       )}
-    </TouchableOpacity>
+    </InstantPressable>
   );
 };
 

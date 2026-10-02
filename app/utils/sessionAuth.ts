@@ -38,12 +38,19 @@ export function clearBackendSessionPresent(): void {
   }
 }
 
-/** True when a backend session JWT exists in any storage slot. */
+/**
+ * True when a backend session JWT exists.
+ * A missed SecureStore read must not clear the logged-in hint. Android
+ * often returns nothing for a moment after the process is killed, and
+ * wiping the hint here is what sent people to the login screen.
+ */
 export async function hasBackendSession(): Promise<boolean> {
   const token = await TokenUtils.getAuthToken();
-  if (token) markBackendSessionPresent();
-  else clearBackendSessionPresent();
-  return !!token;
+  if (token) {
+    markBackendSessionPresent();
+    return true;
+  }
+  return hasBackendSessionSync();
 }
 
 /** Canonical bearer for API / socket / feed auth. */

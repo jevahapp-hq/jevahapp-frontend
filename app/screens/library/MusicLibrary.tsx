@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../../utils/downloadUtils";
+import { buildContentShareFromItem } from "../../../src/shared/share/contentShare";
 
 
 
@@ -100,11 +101,7 @@ export default function MusicLibrary () {
 
   const handleShare = async (item: any) => {
     try {
-      await Share.share({
-        title: item.title,
-        message: `Check out this music: ${item.title}`,
-        url: typeof item.imageUrl === 'string' ? item.imageUrl : (item.fileUrl || ''),
-      });
+      await Share.share(buildContentShareFromItem(item));
       setMenuOpenId(null);
     } catch (error) {
       console.warn("Share error:", error);

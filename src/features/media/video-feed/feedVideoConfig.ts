@@ -5,8 +5,10 @@
  * Pattern: Mux Slop Social / Tendbble — active + previous paused + next
  * primed, warm network only beyond that.
  *
- * Feed cards are a fixed 400px box. Thumbnail + live video both cover-fill
- * the box (APK). Keep the previous card's paused frame so scrolling back
+ * Feed cards are a fixed 400px box. A 9:16 clip, and a clip whose ratio
+ * is not known yet, fills that height and sits in the center. Every other
+ * confirmed ratio covers the whole card. Reels gives 9:16 the full screen.
+ * Keep the previous card's paused frame so scrolling back
  * does not flash the cover thumbnail, and prime the next card the same way
  * so scrolling down also shows a decoded frame instead of the poster.
  */
@@ -16,6 +18,11 @@ import {
 } from "../../../shared/media/underReviewBannerLayout";
 
 export const FEED_VIDEO_PLAYER_HEIGHT = 400;
+/**
+ * Zoom the picture out inside the fixed card. Contain keeps width and height
+ * and shows the whole frame, including heads that cover would crop.
+ */
+export const FEED_CARD_CONTENT_FIT = "contain" as const;
 /** Footer + bottom margin — keep FlashList row size stable. */
 export const FEED_VIDEO_FOOTER_ESTIMATE = 88;
 /**
@@ -59,7 +66,8 @@ export const FEED_VIDEO_MIN_VIEW_MS = 180;
 export const FEED_AUDIO_MIN_VIEW_MS = 0;
 
 /**
- * A hair past 0 so the decoder actually paints a frame instead of sitting
- * black at exactly 0. Also the snapshot underlay timestamp.
+ * Skip the blank first frame. A clip with no saved playhead starts here
+ * instead of rewinding to 0, which is what flashes the cover and a white
+ * surface. Also the snapshot underlay timestamp.
  */
-export const FEED_VIDEO_START_POSITION_SECONDS = 0.01;
+export const FEED_VIDEO_START_POSITION_SECONDS = 0.1;
