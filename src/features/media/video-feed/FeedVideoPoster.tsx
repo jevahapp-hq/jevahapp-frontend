@@ -7,6 +7,7 @@ import type { MediaItem } from "../../../shared/types";
 import { optimizeImageUrl } from "../../../shared/utils/imageOptimizer";
 import { fixOverEncodedMediaUrl } from "../../../shared/utils/videoUrlManager";
 import { FEED_VIDEO_PLAYER_HEIGHT } from "./feedVideoConfig";
+import { forgetFirstFrame, useFirstFrame } from "./firstFrameCache";
 import { useVideoFrameSnapshot } from "./videoFrameSnapshotCache";
 
 function isLikelyVideoUrl(url: string): boolean {
@@ -92,6 +93,7 @@ export function FeedVideoStill({
   contentFit?: "cover" | "contain";
 }) {
   const snapshot = useVideoFrameSnapshot(url ?? null);
+  const firstFrame = useFirstFrame(url);
   if (snapshot) {
     return (
       <Image
@@ -101,6 +103,19 @@ export function FeedVideoStill({
         cachePolicy={getLiteImageCachePolicy()}
         recyclingKey={url || "feed-frame"}
         priority="high"
+      />
+    );
+  }
+  if (firstFrame) {
+    return (
+      <Image
+        source={{ uri: firstFrame }}
+        style={{ width: "100%", height }}
+        contentFit={contentFit}
+        cachePolicy="memory"
+        recyclingKey={url || "feed-first-frame"}
+        priority="high"
+        onError={() => forgetFirstFrame(url)}
       />
     );
   }
@@ -194,7 +209,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   img: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   topFade: {
     position: "absolute",

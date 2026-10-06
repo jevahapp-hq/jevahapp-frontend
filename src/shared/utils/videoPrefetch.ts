@@ -8,10 +8,8 @@ import {
 } from "../../../app/utils/videoOptimization";
 import { PERFORMANCE_CONFIG, PERFORMANCE_FEATURES } from "../config/performance";
 import { PERF, recordSample } from "./perfMarks";
-import {
-  hasLiteVideoHead,
-  persistLiteVideoHead,
-} from "../cache/liteMediaDiskCache";
+import { Platform } from "react-native";
+import { hasLiteVideoHead } from "../cache/liteMediaDiskCache";
 
 const inflight = new Set<string>();
 const MAX_CONCURRENT = Math.min(
@@ -36,18 +34,21 @@ async function warmUrl(url: string): Promise<void> {
       return;
     }
 
+    // Reading the body into JS (arrayBuffer + base64 to disk) blocked the
+    // Android JS thread for seconds per clip, freezing the feed and Reels.
+    // The player never read that file. A small range warms DNS/TLS and the
+    // edge without the copy.
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Range: "bytes=0-1048575", // ~1MB — first GOP + audio init
+        Range: "bytes=0-65535",
       },
     });
-
     try {
-      const buf = await response.arrayBuffer();
-      void persistLiteVideoHead(url, buf);
+      const body = (await response.blob()) as Blob & { close?: () => void };
+      body.close?.();
     } catch {
-      // Some hosts reject Range — partial failure still warms DNS/TLS.
+      // Some hosts reject Range — the request still warmed the connection.
     }
 
     markVideoPreloaded(url);
@@ -71,6 +72,9 @@ function pump(): void {
 /** Enqueue CDN warmup for one or more playback URLs. */
 export function prefetchVideoUrls(urls: Array<string | null | undefined>): void {
   if (!PERFORMANCE_FEATURES.ENABLE_VIDEO_PREFETCH) return;
+  // These requests do not fill ExoPlayer's cache. On Android they only took
+  // bandwidth from the clip on screen (8–13s per warm-up in the logs).
+  if (Platform.OS === "android") return;
 
   for (const raw of urls) {
     const url = typeof raw === "string" ? raw.trim() : "";

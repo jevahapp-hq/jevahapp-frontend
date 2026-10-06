@@ -13,9 +13,30 @@ function playheadKey(url: string | null | undefined): string | null {
   return fixOverEncodedMediaUrl(url);
 }
 
-export function savePlayhead(url: string | null | undefined, seconds: number): void {
+/** This close to the end counts as finished, so the next visit starts over. */
+const ENDED_WITHIN_SECONDS = 0.6;
+
+export function isAtEnd(seconds: number, durationSec?: number): boolean {
+  return (
+    typeof durationSec === "number" &&
+    Number.isFinite(durationSec) &&
+    durationSec > 1 &&
+    seconds >= durationSec - ENDED_WITHIN_SECONDS
+  );
+}
+
+export function savePlayhead(
+  url: string | null | undefined,
+  seconds: number,
+  durationSec?: number
+): void {
   const key = playheadKey(url);
   if (!key || !(seconds > 0.15) || !Number.isFinite(seconds)) return;
+  if (isAtEnd(seconds, durationSec)) {
+    playheads.delete(key);
+    return;
+  }
+  playheads.delete(key);
   playheads.set(key, seconds);
   if (playheads.size > MAX) {
     const oldest = playheads.keys().next().value;

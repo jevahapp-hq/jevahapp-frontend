@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   centerWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

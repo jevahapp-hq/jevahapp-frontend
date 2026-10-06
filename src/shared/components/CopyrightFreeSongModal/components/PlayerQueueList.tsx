@@ -56,7 +56,7 @@ export function PlayerQueueList({
         const key = songKey(item) || `up-next-${index}`;
         const seconds = durationSeconds(item.duration);
         return (
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             key={key}
             onPress={() => onSelectSong(item)}
             activeOpacity={0.75}

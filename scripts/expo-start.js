@@ -176,6 +176,8 @@ const expoArgs = [
 
 process.env.BROWSER = "none";
 process.env.RCT_METRO_PORT = "8081";
+// Android dev keeps route screens out of the first download. Forcing a
+// single bundle inlines every screen (~23MB) and the phone sits on refresh.
 if (!process.env.NODE_OPTIONS) {
   process.env.NODE_OPTIONS = "--max-old-space-size=8192";
 }

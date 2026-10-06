@@ -12,7 +12,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { stopAndDismissNowPlaying } from "@/shared/audio/stopNowPlaying";
 import { setFullscreenBackExit } from "@/features/media/video-feed/fullscreenBackSession";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
@@ -54,8 +53,8 @@ export default function CopyrightFreeSongOverlayHost() {
     [songs]
   );
 
-  const handleStopAndDismiss = useCallback(() => {
-    stopAndDismissNowPlaying();
+  const handleMinimize = useCallback(() => {
+    useCopyrightFreeOverlayStore.getState().minimize();
   }, []);
 
   const handleSeek = useCallback(
@@ -85,16 +84,16 @@ export default function CopyrightFreeSongOverlayHost() {
   useEffect(() => {
     if (!isFull) return;
     useGlobalVideoStore.getState().pauseAllVideosImperatively();
-    setFullscreenBackExit(handleStopAndDismiss);
+    setFullscreenBackExit(handleMinimize);
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      handleStopAndDismiss();
+      handleMinimize();
       return true;
     });
     return () => {
       setFullscreenBackExit(null);
       sub.remove();
     };
-  }, [isFull, handleStopAndDismiss]);
+  }, [isFull, handleMinimize]);
 
   const top =
     (insets.top || StatusBar.currentHeight || 12) + 4 + 4;
@@ -104,7 +103,7 @@ export default function CopyrightFreeSongOverlayHost() {
       visible={isFull}
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={handleStopAndDismiss}
+      onRequestClose={handleMinimize}
       statusBarTranslucent
       hardwareAccelerated
       supportedOrientations={["portrait"]}
@@ -122,7 +121,7 @@ export default function CopyrightFreeSongOverlayHost() {
             song={song}
             variant={initialAction === "options" ? "options" : "player"}
             initialAction={initialAction}
-            onClose={handleStopAndDismiss}
+            onClose={handleMinimize}
             onPlay={handlePlay}
             isPlaying={isCurrent && isPlaying}
             isMuted={isCurrent ? isMuted : false}
@@ -152,9 +151,9 @@ export default function CopyrightFreeSongOverlayHost() {
           <View
             collapsable={false}
             accessibilityRole="button"
-            accessibilityLabel="Close player"
+            accessibilityLabel="Minimize player"
             onStartShouldSetResponder={() => true}
-            onResponderGrant={handleStopAndDismiss}
+            onResponderGrant={handleMinimize}
             style={{
               position: "absolute",
               top,

@@ -13,6 +13,7 @@ import { enqueueFeedEvent } from "../../../src/shared/feed/feedRanker";
 import { getLiteFeedLimit } from "../../../src/shared/lite/liteProfile";
 import { getSessionToken } from "../../utils/sessionAuth";
 import type { MusicLane } from "./MusicLaneTabs";
+import { songCategoryName } from "./musicFormatters";
 import { transformBackendSong } from "./transformBackendSong";
 
 function artistsPageSize(): number {
@@ -168,7 +169,7 @@ export function useMusicCatalog(musicLane: MusicLane) {
             });
           setSongs(transformedSongs);
           if (!append && !browsing) writeMusicCache(lane, transformedSongs);
-        } else {
+        } else if (!browsing) {
           setSongs([]);
         }
       } catch (err) {
@@ -216,21 +217,31 @@ export function useMusicCatalog(musicLane: MusicLane) {
   ]);
 
   const loadCategories = useCallback(async () => {
-    if (musicLane !== "copyright-free") {
-      setCategories([]);
-      return;
-    }
+    if (musicLane !== "copyright-free") return;
     try {
       const response = await copyrightFreeMusicAPI.getCategories();
-      if (response.success && response.data?.categories) {
-        setCategories(
-          response.data.categories.map((cat: any) => cat.name || cat)
-        );
-      }
+      const names = (response.data?.categories || [])
+        .map((cat: any) => String(cat?.name || cat || "").trim())
+        .filter(Boolean);
+      if (!response.success || names.length === 0) return;
+      setCategories((prev) => Array.from(new Set([...names, ...prev])));
     } catch (err) {
       console.warn("Error loading categories:", err);
     }
   }, [musicLane]);
+
+  useEffect(() => {
+    setCategories([]);
+  }, [musicLane]);
+
+  useEffect(() => {
+    const fromSongs = songs.map((song) => songCategoryName(song)).filter(Boolean);
+    if (fromSongs.length === 0) return;
+    setCategories((prev) => {
+      const next = Array.from(new Set([...prev, ...fromSongs]));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [songs]);
 
   useEffect(() => {
     loadSongs(searchQuery || undefined, selectedCategory, musicLane);

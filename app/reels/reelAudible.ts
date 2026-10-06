@@ -7,6 +7,8 @@ import { Platform } from "react-native";
 let locked = false;
 let audibleKey: string | null = null;
 let scrolling = false;
+/** Set in the tap, before React re-renders, so a swipe cannot restart this reel. */
+let manualPauseKey: string | null = null;
 const listeners = new Set<() => void>();
 
 function emitAudible(): void {
@@ -60,7 +62,16 @@ export function reelTouchMovedDuringGesture(): boolean {
   return reelTouchMoved;
 }
 
+export function setReelManualPause(key: string | null): void {
+  manualPauseKey = key;
+}
+
+export function reelManuallyPaused(key: string): boolean {
+  return manualPauseKey != null && manualPauseKey === key;
+}
+
 export function lockAndroidReels(): void {
+  manualPauseKey = null;
   if (locked && audibleKey == null) return;
   locked = true;
   audibleKey = null;
@@ -70,9 +81,15 @@ export function lockAndroidReels(): void {
 export function setAndroidAudibleReel(key: string | null): void {
   const nextLocked = key == null;
   if (audibleKey === key && locked === nextLocked) return;
+  if (manualPauseKey && manualPauseKey !== key) manualPauseKey = null;
   locked = nextLocked;
   audibleKey = key;
   emitAudible();
+}
+
+/** True after leaving Reels. No mounted clip may start sound again. */
+export function reelSoundStopped(): boolean {
+  return locked && audibleKey == null;
 }
 
 /**

@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AppState, View } from "react-native";
+import { AppState, Platform, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { MediaItem } from "../../../shared/types";
@@ -126,7 +126,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, [syncOwnVideoEmails]);
   const liteActive = isLiteProfileActive();
   const listWindow = getLiteListWindow();
-  const maxPlayers = FEED_HARD_MAX_PLAYERS;
+  // Android: the card on screen, the next one primed, and the one you just
+  // left paused on its frame.
+  const maxPlayers = Platform.OS === "android" ? 3 : FEED_HARD_MAX_PLAYERS;
   const queryType = feedQueryContentType(activeTab);
   const tabKind = String(activeTab).toLowerCase();
   const isEbookTab =
@@ -596,31 +598,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         warmVideoConnection(upcoming.audioUrl);
       }
       const overlay = useCopyrightFreeOverlayStore.getState();
-      if (overlay.surface !== "full") return;
-      const thumb = item.imageUrl || item.thumbnailUrl;
-      overlay.setSong({
-        ...track,
-        _id: track.id,
-        fileUrl: track.audioUrl,
-        thumbnailUrl:
-          typeof thumb === "string"
-            ? thumb
-            : (thumb as { uri?: string })?.uri || track.thumbnailUrl,
-        contentType: item.contentType || "sermon",
-        source: "feed",
-      });
-      overlay.setQueue(
-        queue.map((t) => ({
-          id: t.id,
-          _id: t.id,
-          title: t.title,
-          artist: t.artist,
-          thumbnailUrl: t.thumbnailUrl,
-          audioUrl: t.audioUrl,
-          duration: t.duration,
-          source: t.source,
-        }))
-      );
+      if (overlay.surface === "full") {
+        overlay.minimize();
+      }
     },
     [filteredMediaList]
   );

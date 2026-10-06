@@ -64,6 +64,7 @@ export function MusicHeader({
             autoFocus
           />
           <TouchableOpacity
+            delayPressIn={0}
             onPress={() => {
               onSearchChange("");
               onHideSearch();
@@ -92,6 +93,7 @@ export function MusicHeader({
           }}
         >
           <TouchableOpacity
+            delayPressIn={0}
             onPress={onShowSearch}
             style={{
               width: 40,
@@ -105,6 +107,7 @@ export function MusicHeader({
             <Ionicons name="search" size={20} color="#256E63" />
           </TouchableOpacity>
           <TouchableOpacity
+            delayPressIn={0}
             onPress={onOpenFilter}
             style={{
               width: 40,

@@ -1,7 +1,7 @@
-import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { Image } from "expo-image";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from "react";
 import {
   Pressable,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -18,9 +18,22 @@ import { ReelsMenu } from "./ReelsMenu";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
 import ReelsVideoPlayer from "./ReelsVideoPlayer";
 import type { VideoPlayer } from "expo-video";
-import { posterUriFromMedia } from "../../../src/features/media/video-feed";
+import {
+  layoutAspectFromMedia,
+  videoSourceUrls,
+} from "../../../src/features/media/video-feed/displayedVideoAspect";
+import { rememberFeedVideoAspect } from "../../../src/features/media/video-feed/feedVideoAspectCache";
+import { ensureDisplayedAspect } from "../../../src/features/media/video-feed/measureDisplayedAspect";
 import { reelVideoKey } from "../reelScrollIndex";
-import { beginReelTouch, reelTouchMovedDuringGesture } from "../reelAudible";
+import { beginReelTouch, getAudibleReel, androidReelMayHear, reelTouchMovedDuringGesture, subscribeAudibleReel } from "../reelAudible";
+import { getPlayhead } from "../../../src/features/media/video-feed/playheadCache";
+import {
+  getReelDurationMs,
+  getReelPositionMs,
+  publishReelPlayheadNow,
+  reelPlayheadSnapshot,
+  subscribeReelPlayhead,
+} from "../reelPlayheadStore";
 import { reelSharpFit } from "../reelFrame";
 import { peekReelImageAspect, reelImageUri, rememberReelImageAspect } from "../reelMedia";
 import { ReelMediaStage, ReelSharpPicture } from "./ReelMediaStage";
@@ -82,6 +95,8 @@ export interface ReelsVideoItemProps {
   /** Uploader-only description editing. */
   canEditDescription?: boolean;
   onEditDescription?: () => void;
+  /** False right after opening, while the feed is still releasing its players. */
+  neighborPlayers?: boolean;
 }
 
 /**
@@ -97,9 +112,8 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     screenHeight,
     screenWidth,
     isIOS,
-    currentIndex_state,
     videoDuration,
-    videoPosition,
+    videoPosition: _videoPosition,
     isDragging,
     showPauseOverlay,
     userHasManuallyPaused,
@@ -144,8 +158,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     onEditDescription,
   } = props;
 
-  const [localPosition, setLocalPosition] = useState(videoPosition);
-  const [localDuration, setLocalDuration] = useState(() => {
+  const knownDurationMs = useMemo(() => {
     const id = String(videoData?._id || videoData?.id || "");
     return (
       videoDuration ||
@@ -153,7 +166,24 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
       normalizeDurationMs(videoData?.duration) ||
       0
     );
-  });
+  }, [videoData, videoDuration]);
+  const [durationReady, setDurationReady] = useState(
+    () => knownDurationMs > 0 || getReelDurationMs(passedVideoKey || reelVideoKey(videoData, index)) > 0
+  );
+  const setLocalPosition = useCallback(
+    (ms: number) => {
+      publishReelPlayheadNow(passedVideoKey || reelVideoKey(videoData, index), ms);
+    },
+    [passedVideoKey, videoData, index]
+  );
+  const setLocalDuration = useCallback(
+    (ms: number) => {
+      const key = passedVideoKey || reelVideoKey(videoData, index);
+      publishReelPlayheadNow(key, getReelPositionMs(key), ms);
+      setDurationReady(true);
+    },
+    [passedVideoKey, videoData, index]
+  );
 
   // Memoize data processing
   const enriched = useMemo(() => UserProfileCache.enrichContentWithUserData(videoData), [videoData]);
@@ -176,14 +206,26 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     setImageAspect(peekReelImageAspect(imageUri));
   }, [imageUri]);
 
+  // Boolean snapshot: a swipe only re-renders the page you left and the page
+  // you landed on. Returning the audible key re-rendered every mounted reel.
+  const showChrome = useSyncExternalStore(
+    subscribeAudibleReel,
+    () => {
+      const key = getAudibleReel();
+      if (key == null) return isActive && androidReelMayHear(videoKey);
+      return key === videoKey;
+    },
+    () => isActive && androidReelMayHear(videoKey)
+  );
   const isPlaying = useGlobalVideoStore(
     (s) => s.playingVideos[videoKey] ?? false
   );
   const isMuted = useGlobalVideoStore(
     (s) => s.mutedVideos[videoKey] ?? false
   );
-  const distance = Math.abs(index - currentIndex_state);
-  const shouldMountPlayer = distance <= 1;
+  // Neighbors load paused, so a swipe lands on a painted frame instead of a
+  // black page or cover art while a new player starts from nothing.
+  const shouldMountPlayer = hasPlayerSlot(props);
   const tapOriginRef = useRef<{ x: number; y: number } | null>(null);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleThisReel = () => {
@@ -195,29 +237,32 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     clearTimeout(tapTimerRef.current);
     tapTimerRef.current = null;
   };
-  const waitingPoster = posterUriFromMedia(enriched);
-
-  // Track if we should render skeletons
-  const showSkeletons = isActive && !!videoUrl && !imageUri && (!isPlaying || !localDuration);
-
-  /**
-   * Adopt the parent's position/duration only when this item *becomes* active
-   * (or the parent's duration first arrives).
-   *
-   * This used to depend on `videoPosition` too, which made it a two-way sync:
-   * the player pushes position up to the parent while the parent pushed it back
-   * down here, so a one-step rounding disagreement had each render schedule the
-   * other's setState until React hit the update-depth limit. While active, the
-   * player writes `localPosition` directly — this effect must not fight it.
-   */
   useEffect(() => {
-    if (!isActive) return;
-    if (!isDragging) setLocalPosition(videoPosition);
-    // A 0 from the parent is "not loaded yet", not a real length. Copying it
-    // wiped the duration the feed card already knew (stuck at 0:00 / 0:00).
-    if (videoDuration > 0) setLocalDuration(videoDuration);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, videoDuration]);
+    if (!videoUrl) return;
+    const urls = videoSourceUrls(enriched, videoUrl);
+    const stored = layoutAspectFromMedia(enriched);
+    if (stored != null) {
+      for (const source of urls) rememberFeedVideoAspect(source, stored);
+      return;
+    }
+    ensureDisplayedAspect(videoUrl, { allowPlayer: false, also: urls, priority: isActive });
+  }, [videoUrl, enriched, isActive]);
+
+  const showSkeletons =
+    showChrome && !!videoUrl && !imageUri && !durationReady && knownDurationMs <= 0;
+
+  useEffect(() => {
+    if (!videoUrl) return;
+    const savedMs = getPlayhead(videoUrl) * 1000;
+    const existing = getReelPositionMs(videoKey);
+    const duration = getReelDurationMs(videoKey) || knownDurationMs;
+    if (existing <= 0 && savedMs > 150) {
+      publishReelPlayheadNow(videoKey, savedMs, duration || undefined);
+    } else if (duration > 0 && getReelDurationMs(videoKey) !== duration) {
+      publishReelPlayheadNow(videoKey, existing, duration);
+    }
+    if ((duration || savedMs) > 0) setDurationReady(true);
+  }, [videoKey, videoUrl, knownDurationMs]);
 
   if (!enriched || !enriched.title || (!videoUrl && !imageUri)) {
     return (
@@ -237,13 +282,15 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
       }}
     >
       {videoUrl && !imageUri && shouldMountPlayer ? (
-        <ReelsVideoPlayer
+          <ReelsVideoPlayer
           videoKey={videoKey}
           contentId={String(enriched._id || enriched.id || "")}
           videoUrl={videoUrl}
+          posterUri={null}
           screenHeight={screenHeight}
           screenWidth={screenWidth}
           isActive={isActive}
+          warmNext={index === props.currentIndex_state + 1}
           isMuted={isMuted}
           videoVolume={1.0}
           isPlaying={isPlaying}
@@ -258,14 +305,6 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
           showPauseOverlay={showPauseOverlay}
           getResponsiveSize={getResponsiveSize}
           triggerHapticFeedback={triggerHapticFeedback}
-        />
-      ) : videoUrl && !imageUri && waitingPoster ? (
-        <Image
-          source={{ uri: waitingPoster }}
-          style={{ width: screenWidth, height: screenHeight }}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          pointerEvents="none"
         />
       ) : imageUri ? (
         <ReelMediaStage
@@ -297,6 +336,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
         </ReelMediaStage>
       ) : null}
 
+      <View pointerEvents="box-none" collapsable={false} style={styles.chrome}>
       <Pressable
         onPressIn={(event) => {
           beginReelTouch();
@@ -322,7 +362,10 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
           if (!start) return;
           const dx = Math.abs(event.nativeEvent.pageX - start.x);
           const dy = Math.abs(event.nativeEvent.pageY - start.y);
-          const scrolled = dx > 10 || dy > 10 || reelTouchMovedDuringGesture();
+          const scrolled =
+            dx > 28 ||
+            dy > 28 ||
+            (isIOS && reelTouchMovedDuringGesture());
           if (scrolled) {
             clearTapTimer();
             return;
@@ -343,8 +386,8 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
           // Android was letting this layer sit on the heart, comment, save, and share.
           right: isIOS ? 0 : 112,
           bottom: isIOS ? 48 : 210,
-          zIndex: isIOS ? 8 : 40,
-          elevation: isIOS ? 0 : 48,
+          zIndex: 8,
+          elevation: 0,
         }}
       />
 
@@ -370,8 +413,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
         </View>
       )}
 
-      {isActive && (
-        <>
+      <View pointerEvents="box-none" style={styles.chrome}>
           <ReelsActionButtons
             videoKey={videoKey}
             modalKey={modalKey}
@@ -411,7 +453,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
             onEditDescription={onEditDescription}
           />
           <ReelsMenu
-            visible={menuVisible}
+            visible={menuVisible && showChrome}
             modalKey={modalKey}
             contentId={String(
               enriched._id || enriched.id || currentVideo?._id || currentVideo?.id || ""
@@ -428,42 +470,122 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
             onDownload={onDownload}
             onShare={() => onShare(videoKey)}
           />
-        </>
-      )}
-
-      {isActive && videoUrl && !imageUri ? (
-        <VideoProgressBar
-          progress={localDuration > 0 ? localPosition / localDuration : 0}
-          currentMs={localPosition}
-          durationMs={localDuration > 0 ? localDuration : videoDuration}
-          isMuted={isMuted}
-          onToggleMute={() => onToggleMute(videoKey)}
-          onSeekToPercent={(pct: number) => {
-            const clamped = Math.max(0, Math.min(1, pct));
-            const dur =
-              localDuration > 0
-                ? localDuration
-                : videoDuration > 0
-                  ? videoDuration
-                  : 0;
-            if (dur > 0) setLocalPosition(clamped * dur);
-            onSeek(videoKey, clamped);
-          }}
-          onScrubStart={() => setIsDragging(true)}
-          onScrubEnd={() => setIsDragging(false)}
-          showControls
-          bottomOffset={getBottomNavHeight() + getResponsiveSpacing(6, 8, 10)}
-          enlargeOnDrag
-          knobSize={8}
-          knobSizeDragging={12}
-          trackHeights={{ normal: 4, dragging: 8 }}
-          seekDuringDrag
-          liveSeekThrottleMs={32}
-          enableHaptics
-          verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
-          style={{ zIndex: 200, elevation: 200 }}
-        />
-      ) : null}
+          {videoUrl && !imageUri ? (
+            <ReelScrubber
+              videoKey={videoKey}
+              fallbackDurationMs={knownDurationMs}
+              isMuted={isMuted}
+              onToggleMute={() => onToggleMute(videoKey)}
+              onSeek={onSeek}
+              onScrubStart={() => setIsDragging(true)}
+              onScrubEnd={() => setIsDragging(false)}
+              bottomOffset={getBottomNavHeight() + getResponsiveSpacing(6, 8, 10)}
+            />
+          ) : null}
+      </View>
+      </View>
     </View>
   );
+}, sameReelRender);
+
+const ReelScrubber = memo(function ReelScrubber({
+  videoKey,
+  fallbackDurationMs,
+  isMuted,
+  onToggleMute,
+  onSeek,
+  onScrubStart,
+  onScrubEnd,
+  bottomOffset,
+}: {
+  videoKey: string;
+  fallbackDurationMs: number;
+  isMuted: boolean;
+  onToggleMute: () => void;
+  onSeek: (videoKey: string, position: number) => void;
+  onScrubStart: () => void;
+  onScrubEnd: () => void;
+  bottomOffset: number;
+}) {
+  const head = useSyncExternalStore(
+    (listener) => subscribeReelPlayhead(videoKey, listener),
+    () => reelPlayheadSnapshot(videoKey),
+    () => reelPlayheadSnapshot(videoKey)
+  );
+  const durationMs = head.durationMs > 0 ? head.durationMs : fallbackDurationMs;
+  return (
+    <VideoProgressBar
+      progress={durationMs > 0 ? head.positionMs / durationMs : 0}
+      currentMs={head.positionMs}
+      durationMs={durationMs}
+      isMuted={isMuted}
+      onToggleMute={onToggleMute}
+      onSeekToPercent={(pct: number) => {
+        const clamped = Math.max(0, Math.min(1, pct));
+        if (durationMs > 0) {
+          publishReelPlayheadNow(videoKey, clamped * durationMs, durationMs);
+        }
+        onSeek(videoKey, clamped);
+      }}
+      onScrubStart={onScrubStart}
+      onScrubEnd={onScrubEnd}
+      showControls
+      bottomOffset={bottomOffset}
+      enlargeOnDrag
+      knobSize={8}
+      knobSizeDragging={12}
+      trackHeights={{ normal: 4, dragging: 8 }}
+      seekDuringDrag
+      liveSeekThrottleMs={32}
+      enableHaptics
+      verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
+      style={{ zIndex: 200, elevation: 200 }}
+    />
+  );
 });
+
+const styles = StyleSheet.create({
+  chrome: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 30,
+    elevation: 40,
+    backgroundColor: "transparent",
+  },
+});
+
+function hasPlayerSlot(props: ReelsVideoItemProps): boolean {
+  const distance = Math.abs(props.index - props.currentIndex_state);
+  return distance === 0 || (distance === 1 && props.neighborPlayers !== false);
+}
+
+/**
+ * A reel that stays off screen only cares about its own media and whether
+ * its player is mounted. Every other prop belongs to the reel on screen, and
+ * re-rendering all mounted pages on each swipe delayed the next swipe's
+ * pause/play on Android.
+ */
+function sameReelRender(
+  prev: ReelsVideoItemProps,
+  next: ReelsVideoItemProps
+): boolean {
+  if (prev.isActive || next.isActive) {
+    const keys = Object.keys(next) as (keyof ReelsVideoItemProps)[];
+    if (keys.length !== Object.keys(prev).length) return false;
+    return keys.every(
+      (key) => key === "videoPosition" || prev[key] === next[key]
+    );
+  }
+  const warming = (item: ReelsVideoItemProps) =>
+    item.index === item.currentIndex_state + 1;
+  return (
+    prev.videoData === next.videoData &&
+    prev.index === next.index &&
+    prev.passedVideoKey === next.passedVideoKey &&
+    prev.screenHeight === next.screenHeight &&
+    prev.screenWidth === next.screenWidth &&
+    prev.isIOS === next.isIOS &&
+    prev.source === next.source &&
+    hasPlayerSlot(prev) === hasPlayerSlot(next) &&
+    warming(prev) === warming(next)
+  );
+}

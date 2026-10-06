@@ -22,9 +22,12 @@ const GRID_CATEGORIES = new Set(["ALL", "SERMON", "E-BOOKS", "VIDEO"]);
 
 export default function LibraryScreen({
   embedded = false,
+  active = true,
 }: {
   /** When true (Home keep-alive tab), hide nested BottomNav — parent owns chrome */
   embedded?: boolean;
+  /** False while another main tab is in front. */
+  active?: boolean;
 }) {
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [query, setQuery] = useState("");
@@ -95,7 +98,7 @@ export default function LibraryScreen({
     if (selectedCategory === "MUSIC") {
       return (
         <Suspense fallback={<ContentLoadingFallback />}>
-          <Music />
+          <Music active={active && selectedCategory === "MUSIC"} />
         </Suspense>
       );
     }

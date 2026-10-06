@@ -14,6 +14,7 @@ export function SongGridItem({
 
   return (
     <TouchableOpacity
+      delayPressIn={0}
       onPress={() => {
         onOpenPlayer(item);
         // Start playing immediately (fire and forget - don't await to avoid blocking UI)
@@ -68,6 +69,7 @@ export function SongGridItem({
       </Text>
       <TouchableOpacity
         disabled={!item.artistSlug}
+        delayPressIn={0}
         onPress={(e) => {
           e.stopPropagation();
           onOpenArtistProfile?.(item.artistSlug);

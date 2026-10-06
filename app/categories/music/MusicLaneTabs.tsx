@@ -29,6 +29,7 @@ export function MusicLaneTabs({ lane, onChange }: Props) {
         return (
           <TouchableOpacity
             key={tab.id}
+            delayPressIn={0}
             onPress={() => onChange(tab.id)}
             activeOpacity={0.85}
             style={{

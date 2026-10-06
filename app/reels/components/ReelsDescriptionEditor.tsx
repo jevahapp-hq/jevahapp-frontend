@@ -66,7 +66,8 @@ export const ReelsDescriptionEditor: React.FC<Props> = ({
           >
             <View style={styles.header}>
               <TouchableOpacity
-                onPress={onCancel}
+                onPressIn={onCancel}
+                delayPressIn={0}
                 hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
@@ -75,7 +76,8 @@ export const ReelsDescriptionEditor: React.FC<Props> = ({
               </TouchableOpacity>
               <Text style={styles.title}>Edit description</Text>
               <TouchableOpacity
-                onPress={() => onSubmit(value)}
+                delayPressIn={0}
+                onPressIn={() => onSubmit(value)}
                 disabled={isSaving || !dirty || remaining < 0}
                 hitSlop={12}
                 accessibilityRole="button"

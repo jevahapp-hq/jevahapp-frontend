@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dimensions, View } from "react-native";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { ArtistsLaneBanner } from "./components/ArtistsLaneBanner";
@@ -15,10 +15,13 @@ import {
     MusicLaneTabs,
     type MusicLane,
 } from "./MusicLaneTabs";
+import { filterCatalogSongs } from "./musicFormatters";
 import type { DisplayMode } from "./types";
+import { useCatalogMusicWhilePageOpen } from "./useCatalogMusicWhilePageOpen";
 import { useMusicCatalog } from "./useMusicCatalog";
 
-export default function Music() {
+export default function Music({ active = true }: { active?: boolean }) {
+  useCatalogMusicWhilePageOpen(active);
   const router = useRouter();
   const [musicLane, setMusicLane] = useState<MusicLane>("copyright-free");
   const {
@@ -42,18 +45,23 @@ export default function Music() {
 
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+  const visibleSongs = useMemo(
+    () => filterCatalogSongs(songs, searchQuery, selectedCategory),
+    [songs, searchQuery, selectedCategory]
+  );
   const openArtistProfile = useOpenArtistProfile();
-  const handlePlayPress = useMusicPlayPress(songs);
+  const handlePlayPress = useMusicPlayPress(visibleSongs);
   const { openSongPlayer, openSongOptions } = useSongModal();
 
   useEffect(() => {
-    useCopyrightFreeOverlayStore.getState().setQueue(songs);
-    if (songs[0]) {
-      useCopyrightFreeOverlayStore.getState().warm(songs[0]);
+    useCopyrightFreeOverlayStore.getState().setQueue(visibleSongs);
+    if (visibleSongs[0]) {
+      useCopyrightFreeOverlayStore.getState().warm(visibleSongs[0]);
     }
-  }, [songs]);
+  }, [visibleSongs]);
 
-  const showEmpty = loading || !!error || songs.length === 0;
+  const showEmpty = visibleSongs.length === 0;
+  const emptyIsLoading = loading && songs.length === 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -86,14 +94,14 @@ export default function Music() {
 
       {showEmpty ? (
         <MusicEmptyState
-          loading={loading}
-          error={error}
+          loading={emptyIsLoading}
+          error={songs.length === 0 ? error : null}
           musicLane={musicLane}
           onBecomeCreator={() => router.push("/creators")}
         />
       ) : (
         <MusicSongsList
-          songs={songs}
+          songs={visibleSongs}
           displayMode={displayMode}
           musicLane={musicLane}
           loading={loading}

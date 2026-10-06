@@ -3,6 +3,7 @@ import {
   resolveAudioDurationMs,
 } from "./resolveAudioDurationMs";
 import { writeAudioPlaybackClock } from "./audioProgressStore";
+import { cancelScheduledTrackAdvance } from "./scheduleTrackAdvance";
 import type {
   AudioPlayerGet,
   AudioPlayerSet,
@@ -15,6 +16,7 @@ export function createSeekActions(
 ): Pick<GlobalAudioPlayerState, "seek" | "seekToProgress"> {
   return {
     seek: async (position: number) => {
+      cancelScheduledTrackAdvance();
       const { soundInstance, duration, currentTrack } = get();
       const effectiveDuration = resolveAudioDurationMs({
         playerDurationMs: duration,

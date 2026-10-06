@@ -3,10 +3,9 @@
 /**
  * Build the Hermes bundle on this Mac before the phone asks.
  * iPhone aborts in ~10–30s with "Could not connect to development server"
- * if Metro is still compiling. Android lazy mode does the same with
- * "Could not load bundle": the phone opens dozens of chunk requests,
- * Metro falls behind, and the load fails. Use curl (total-time limit,
- * not idle timeout).
+ * if Metro is still compiling. Prewarm the Android app shell. Screens
+ * load when opened, so this file stays small. iOS is opt-in so it does
+ * not take the 4 cores while an Android phone is waiting.
  */
 
 const { spawn } = require("child_process");
@@ -16,7 +15,7 @@ function bundlePath(platform) {
   return (
   "/node_modules/expo-router/entry.bundle" +
     `?platform=${platform}&dev=true&hot=false&lazy=true` +
-  "&transform.engine=hermes&transform.bytecode=1" +
+  "&transform.engine=hermes&transform.bytecode=1&transform.asyncRoutes=true" +
     "&transform.routerRoot=app&unstable_transformProfile=hermes-stable"
   );
 }
@@ -85,8 +84,9 @@ function curlBundle(platform) {
 (async () => {
   try {
     await waitForMetro();
-    // Android first. That is the client currently failing to load chunks.
-    for (const platform of ["android", "ios"]) {
+    const platforms = ["android"];
+    if (process.env.EXPO_PREWARM_IOS === "1") platforms.push("ios");
+    for (const platform of platforms) {
       const label = platform === "ios" ? "iOS" : "Android";
     console.log(
         `Metro is up. Pre-building the ${label} bundle (keep the app closed until this finishes)...`

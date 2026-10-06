@@ -33,6 +33,7 @@ export const MiniBarControls = React.memo(function MiniBarControls({
   return (
     <View style={styles.controls}>
       <Pressable
+        unstable_pressDelay={0}
         onPress={onPrevious}
         style={styles.playButton}
         hitSlop={HIT_SLOP}
@@ -43,6 +44,7 @@ export const MiniBarControls = React.memo(function MiniBarControls({
       </Pressable>
 
       <Pressable
+        unstable_pressDelay={0}
         onPress={onTogglePlayPause}
         style={styles.ghostButton}
         hitSlop={HIT_SLOP}
@@ -58,6 +60,7 @@ export const MiniBarControls = React.memo(function MiniBarControls({
       </Pressable>
 
       <Pressable
+        unstable_pressDelay={0}
         onPress={onNext}
         style={styles.ghostButton}
         hitSlop={HIT_SLOP}
@@ -68,6 +71,7 @@ export const MiniBarControls = React.memo(function MiniBarControls({
       </Pressable>
 
       <Pressable
+        unstable_pressDelay={0}
         onPress={onClose}
         hitSlop={HIT_SLOP}
         style={styles.closeButton}

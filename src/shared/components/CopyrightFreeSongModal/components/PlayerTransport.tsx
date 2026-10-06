@@ -27,7 +27,7 @@ export function PlayerTransport({
   const repeatOn = repeatMode !== "none";
 
   const optionsBtn = (
-    <TouchableOpacity
+    <TouchableOpacity delayPressIn={0}
       onPress={onOptionsPress}
       activeOpacity={0.7}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -40,7 +40,7 @@ export function PlayerTransport({
   );
 
   const repeatBtn = (
-    <TouchableOpacity
+    <TouchableOpacity delayPressIn={0}
       onPress={onRepeatCycle}
       activeOpacity={0.7}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -70,7 +70,7 @@ export function PlayerTransport({
     <View style={styles.row}>
       {optionsPosition === "start" ? optionsBtn : repeatBtn}
 
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onPrevious}
         activeOpacity={0.7}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -81,7 +81,7 @@ export function PlayerTransport({
         <Ionicons name="play-skip-back" size={30} color="#FFFFFF" />
       </TouchableOpacity>
 
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onTogglePlay}
         activeOpacity={0.85}
         accessibilityRole="button"
@@ -96,7 +96,7 @@ export function PlayerTransport({
         />
       </TouchableOpacity>
 
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onNext}
         activeOpacity={0.7}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

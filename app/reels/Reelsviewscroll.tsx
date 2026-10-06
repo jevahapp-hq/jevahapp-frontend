@@ -2,7 +2,9 @@
  * Reelsviewscroll - Main Reels screen
  * Fully modularized and performance optimized.
  */
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { Image } from "expo-image";
+import { useFocusEffect } from "expo-router";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, StatusBar, StyleSheet, View } from "react-native";
 import Animated, {
   runOnJS,
@@ -13,14 +15,29 @@ import {
   useFullscreenBackInterceptor,
 } from "../../src/features/media/video-feed";
 import { suspendFeedDecoders } from "../../src/features/media/video-feed/feedDecoderGate";
+import { useVideoFrameSnapshot } from "../../src/features/media/video-feed/videoFrameSnapshotCache";
+import {
+  getBestVideoUrl,
+  getVideoUrlFromMedia,
+} from "../../src/shared/utils/videoUrlManager";
+import { prefetchFeedVideoAspects } from "../../src/features/media/video-feed/prefetchFeedVideoAspects";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
 import { dismissReadingNarration } from "../../src/shared/audio/dismissReadingNarration";
+import { useCommentModal } from "../context/CommentModalContext";
 import { ReelsDescriptionEditor } from "./components/ReelsDescriptionEditor";
 import { ReelsErrorView } from "./components/ReelsErrorView";
 import { ReelsModals } from "./components/ReelsModals";
 import { ReelsVideoItem } from "./components/ReelsVideoItem";
-import { markReelTouchMoved, registerReelScrollGuard } from "./reelAudible";
+import { useReelsOrchestrator } from "./hooks/useReelsOrchestrator";
+import {
+  lockAndroidReels,
+  markReelTouchMoved,
+  registerReelScrollGuard,
+  setAndroidAudibleReel,
+} from "./reelAudible";
+import { isLiveVideoPlayer } from "../../src/features/media/video-feed/safeVideoPlayer";
+import { nextScrollDirection, reelIndexWhileScrolling } from "./reelScrollIndex";
 import SuccessCard from "../components/SuccessCard";
 
 const ReelsView = () => {
@@ -35,6 +52,8 @@ const ReelsView = () => {
   const armedSv = useSharedValue(0);
   const prevOffsetSv = useSharedValue(0);
   const scrollGuardSv = useSharedValue(0);
+  const dirSv = useSharedValue(0);
+  const anchorSv = useSharedValue(0);
   const openingCapturedRef = useRef(false);
   // Window height is taller than the list on Android, so sizing cells from
   // it shoved the video and title under the bottom nav, then a later layout
@@ -45,6 +64,13 @@ const ReelsView = () => {
   } | null>(null);
   const cellWidth = viewport?.width || o.responsive.screenWidth;
   const cellHeight = viewport?.height || 0;
+  const openingUrl = useMemo(() => {
+    const item =
+      o.allVideos[Math.max(0, o.currentIndex_state)] ?? o.allVideos[0];
+    const raw = getVideoUrlFromMedia(item);
+    return raw ? getBestVideoUrl(raw) : null;
+  }, [o.allVideos, o.currentIndex_state]);
+  const openingFrame = useVideoFrameSnapshot(openingUrl);
 
   const onScreenLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
@@ -78,14 +104,73 @@ const ReelsView = () => {
     });
   }, [viewport, o.allVideos.length, o.currentIndex_state, o.pendingStartIndexRef]);
 
-  // Hardware back exits fullscreen before the root app-exit prompt.
-  useFullscreenBackInterceptor(o.handlers.handleBackNavigation);
+  const handleBackNavigation = o.handlers.handleBackNavigation;
+  const videoRefs = o.videoRefs;
+  const { isVisible: commentsOpen, hideCommentModal } = useCommentModal();
+  const commentsOpenRef = useRef(commentsOpen);
+  commentsOpenRef.current = commentsOpen;
+  const modalKeyRef = useRef(o.current?.modalKey ?? "");
+  modalKeyRef.current = o.current?.modalKey ?? "";
+  const silenceReelPlayers = useCallback(() => {
+    Object.values(videoRefs.current).forEach((player) => {
+      if (!isLiveVideoPlayer(player)) return;
+      try {
+        player.muted = true;
+        player.volume = 0;
+        player.pause();
+      } catch {
+        // Released native player.
+      }
+    });
+  }, [videoRefs]);
+  // Sound stops on the press itself; leaving the screen takes a moment longer.
+  const exitingRef = useRef(false);
+  const exitReels = useCallback(() => {
+    // Back and close dismiss comments first. Leaving the screen under the
+    // sheet is what made cancel feel like it did nothing.
+    if (commentsOpenRef.current) {
+      hideCommentModal();
+      return;
+    }
+    // A second press while the screen is closing has nothing to go back to.
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    silenceReelPlayers();
+    lockAndroidReels();
+    handleBackNavigation();
+  }, [handleBackNavigation, hideCommentModal, silenceReelPlayers]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const key = modalKeyRef.current;
+      if (key) setAndroidAudibleReel(key);
+      return () => {
+        silenceReelPlayers();
+        lockAndroidReels();
+      };
+    }, [silenceReelPlayers])
+  );
+
+  // Hardware back exits fullscreen before the root app-exit prompt.
+  useFullscreenBackInterceptor(exitReels);
+
+  // The opened reel takes the first decoder. Neighbors mount on the next
+  // turn, after the feed has been told to drop its players.
+  const [neighborPlayers, setNeighborPlayers] = useState(false);
   useEffect(() => {
     dismissReadingNarration();
     // Feed cards must release their decoders before this screen creates any.
     suspendFeedDecoders();
+    const timer = setTimeout(() => setNeighborPlayers(true), 0);
+    return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    prefetchFeedVideoAspects(
+      o.allVideos.slice(Math.max(0, o.currentIndex_state - 1)),
+      3
+    );
+  }, [o.allVideos, o.currentIndex_state]);
 
   const commitVisibleIndex = o.scroll.commitVisibleIndex;
   const commitIndex = useCallback(
@@ -93,6 +178,17 @@ const ReelsView = () => {
       commitVisibleIndex(index);
     },
     [commitVisibleIndex]
+  );
+  const settleFromOffset = useCallback(
+    (offsetY: number) => {
+      if (!(cellHeight > 0) || o.allVideos.length === 0) return;
+      const index = Math.max(
+        0,
+        Math.min(o.allVideos.length - 1, Math.round(offsetY / cellHeight))
+      );
+      commitIndex(index);
+    },
+    [cellHeight, commitIndex, o.allVideos.length]
   );
 
   useEffect(() => {
@@ -106,8 +202,10 @@ const ReelsView = () => {
       );
       openingIndexSv.value = opening;
       prevOffsetSv.value = opening * cellHeight;
+      anchorSv.value = opening * cellHeight;
     }
   }, [
+    anchorSv,
     cellHeight,
     cellHeightSv,
     countSv,
@@ -138,8 +236,10 @@ const ReelsView = () => {
           if (opening > 0 && nearZero && !nearOpening) return;
           armedSv.value = 1;
         }
-        const page = offsetY / height;
-        const index = Math.max(0, Math.min(count - 1, Math.round(page)));
+        const moved = nextScrollDirection(dirSv.value, anchorSv.value, offsetY);
+        dirSv.value = moved.direction;
+        anchorSv.value = moved.anchor;
+        const index = reelIndexWhileScrolling(offsetY / height, moved.direction, count);
         if (
           scrollGuardSv.value === 0 &&
           Math.abs(offsetY - prevOffsetSv.value) > 8
@@ -177,10 +277,14 @@ const ReelsView = () => {
             screenWidth={cellWidth}
             isIOS={o.responsive.isIOS}
             currentIndex_state={o.currentIndex_state}
-            videoDuration={o.videoDuration}
-            videoPosition={o.videoPosition}
-            isDragging={o.isDragging}
-            showPauseOverlay={o.showPauseOverlay}
+            neighborPlayers={neighborPlayers}
+            // Only the reel on screen follows the playhead. Passing it to the
+            // neighbors re-rendered every mounted page each second, and taps
+            // queued behind that work on Android.
+            videoDuration={isActive ? o.videoDuration : 0}
+            videoPosition={isActive ? o.videoPosition : 0}
+            isDragging={isActive ? o.isDragging : false}
+            showPauseOverlay={isActive ? o.showPauseOverlay : false}
             userHasManuallyPaused={o.userHasManuallyPaused}
             modalKey={o.current.modalKey}
             currentVideo={o.current.currentVideo}
@@ -227,7 +331,7 @@ const ReelsView = () => {
         </View>
       );
     },
-    [o, cellHeight, cellWidth]
+    [o, cellHeight, cellWidth, neighborPlayers]
   );
 
   if (o.hasError) {
@@ -238,7 +342,7 @@ const ReelsView = () => {
           o.setHasError(false);
           o.setErrorMessage("");
         }}
-        onGoBack={o.handlers.handleBackNavigation}
+        onGoBack={exitReels}
       />
     );
   }
@@ -259,7 +363,7 @@ const ReelsView = () => {
         renderItem={renderItem}
         keyExtractor={(item, index) => `reel-${item._id || item.id || index}`}
         pagingEnabled
-        scrollEnabled={!o.isDragging}
+        scrollEnabled={!o.isDragging && !commentsOpen}
         showsVerticalScrollIndicator={false}
         viewabilityConfigCallbackPairs={o.scroll.viewabilityConfigCallbackPairs as any}
         initialScrollIndex={
@@ -281,12 +385,30 @@ const ReelsView = () => {
         windowSize={5}
         decelerationRate="fast"
         disableIntervalMomentum
-        scrollEventThrottle={16}
+        scrollEventThrottle={8}
         onScroll={onReelScroll}
+        onMomentumScrollEnd={(event) => {
+          settleFromOffset(event.nativeEvent.contentOffset.y);
+        }}
+        onScrollEndDrag={(event) => {
+          const velocity = event.nativeEvent.velocity?.y ?? 0;
+          if (Math.abs(velocity) > 0.05) return;
+          settleFromOffset(event.nativeEvent.contentOffset.y);
+        }}
         style={styles.list}
       />
       ) : (
-        <View style={styles.list} />
+        <View style={styles.list}>
+          {openingFrame ? (
+            <Image
+              source={openingFrame}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              cachePolicy="memory"
+              priority="high"
+            />
+          ) : null}
+        </View>
       )}
 
       <ReelsModals
@@ -297,11 +419,11 @@ const ReelsView = () => {
         showDeleteModal={o.showDeleteModal}
         showReportModal={o.showReportModal}
         showDetailsModal={o.showDetailsModal}
-        onBackPress={o.handlers.handleBackNavigation}
+        onBackPress={exitReels}
         onTabChange={(tab) => {
           o.triggerHapticFeedback();
           if (tab === "Home") {
-            o.handlers.handleBackNavigation();
+            exitReels();
             return;
           }
           o.handlers.persistFeedResumeFromReels();

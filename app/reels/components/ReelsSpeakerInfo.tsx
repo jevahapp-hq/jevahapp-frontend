@@ -228,7 +228,8 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
               </Text>
               {canEditDescription ? (
                 <TouchableOpacity
-                  onPress={onEditDescription}
+                  delayPressIn={0}
+                  onPressIn={onEditDescription}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   activeOpacity={0.7}
                   style={{ paddingLeft: 8, paddingTop: 1 }}
@@ -247,7 +248,8 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
             // Without this the owner of a description-less reel would have no
             // way to add one.
             <TouchableOpacity
-              onPress={onEditDescription}
+              delayPressIn={0}
+              onPressIn={onEditDescription}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               activeOpacity={0.7}
               style={{
@@ -308,7 +310,8 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
       </View>
 
       <TouchableOpacity
-        onPress={() => {
+        delayPressIn={0}
+        onPressIn={() => {
           triggerHapticFeedback();
           onMenuToggle();
         }}

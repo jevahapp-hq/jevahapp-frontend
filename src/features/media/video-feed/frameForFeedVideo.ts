@@ -28,9 +28,8 @@ function nineSixteenColumn(boxW: number): FeedVideoFrame {
 /**
  * A 9:16 clip fills the card height and sits in the center.
  * The side gaps are for a snapshot of that same video.
- * An unknown ratio uses that same column so a portrait upload is not
- * cover-cropped into the full card before its real size arrives.
- * Every other confirmed ratio covers the whole card.
+ * Every other ratio, and an unknown one, covers the whole card. Most
+ * sermons are wide, and starting them in the column made them jump.
  */
 export function frameForFeedVideo(
   videoAspect: number | null,
@@ -42,8 +41,6 @@ export function frameForFeedVideo(
     height: FEED_VIDEO_PLAYER_HEIGHT,
   };
   if (!(boxW > 0)) return fullCard;
-  if (videoAspect == null || isNineSixteenAspect(videoAspect)) {
-    return nineSixteenColumn(boxW);
-  }
+  if (isNineSixteenAspect(videoAspect)) return nineSixteenColumn(boxW);
   return fullCard;
 }

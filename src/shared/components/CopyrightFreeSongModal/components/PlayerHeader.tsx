@@ -35,12 +35,12 @@ export function PlayerHeader({ onClose, onOptionsPress }: PlayerHeaderProps) {
       <View
         collapsable={false}
         accessibilityRole="button"
-        accessibilityLabel="Close player"
+        accessibilityLabel="Minimize player"
         onStartShouldSetResponder={() => true}
         onResponderGrant={onClose}
         style={iconBtn}
       >
-        <Ionicons name="close" size={22} color="#FFFFFF" pointerEvents="none" />
+        <Ionicons name="chevron-down" size={22} color="#FFFFFF" pointerEvents="none" />
       </View>
 
       <View

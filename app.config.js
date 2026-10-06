@@ -13,11 +13,18 @@ const ANDROID_PACKAGE = {
 const SPLASH_BACKGROUND = "#FFFFFF";
 const SPLASH_IMAGE = "./assets/images/splash-logo.png";
 
-/** EAS profile can set ANDROID_BUILD_ARCHS=arm64-v8a (smallest sideload) or armeabi-v7a,arm64-v8a (Play). */
-const androidBuildArchs = (process.env.ANDROID_BUILD_ARCHS || "arm64-v8a")
-  .split(",")
-  .map((arch) => arch.trim())
-  .filter(Boolean);
+/**
+ * EAS profile can set ANDROID_BUILD_ARCHS=arm64-v8a, a comma list, or "all".
+ * "all" leaves the ABI list unset so the APK is not limited to 32-bit or 64-bit.
+ */
+const requestedAndroidArchs = (process.env.ANDROID_BUILD_ARCHS || "arm64-v8a").trim();
+const androidBuildArchs =
+  requestedAndroidArchs === "all"
+    ? null
+    : requestedAndroidArchs
+        .split(",")
+        .map((arch) => arch.trim())
+        .filter(Boolean);
 
 export default {
   expo: {
@@ -129,7 +136,17 @@ export default {
       favicon: "./assets/images/favicon.png",
     },
     plugins: [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          // Expo Go refresh was evaluating every screen up front. Android
+          // dev loads a route when it opens. iOS and release builds stay eager.
+          asyncRoutes: {
+            android: "development",
+            default: false,
+          },
+        },
+      ],
       "expo-secure-store",
       "expo-font",
       "expo-asset",
@@ -154,7 +171,7 @@ export default {
         "expo-build-properties",
         {
           android: {
-            buildArchs: androidBuildArchs,
+            ...(androidBuildArchs ? { buildArchs: androidBuildArchs } : {}),
             enableMinifyInReleaseBuilds: true,
             enableShrinkResourcesInReleaseBuilds: false,
             enableBundleCompression: true,

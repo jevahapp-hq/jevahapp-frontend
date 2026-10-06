@@ -117,7 +117,7 @@ export default function HomeScreen() {
           >
             <Suspense fallback={<LibraryTabSkeleton />}>
               <ContentErrorBoundary>
-                <LibraryScreen embedded />
+                <LibraryScreen embedded active={selectedTab === "Library"} />
               </ContentErrorBoundary>
             </Suspense>
           </View>

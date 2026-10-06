@@ -1,25 +1,12 @@
-import {
-  createAudioPlayer,
-  setAudioModeAsync,
-  type AudioStatus,
-} from "expo-audio";
-import { releaseAudioPlayer } from "../../shared/audio/releaseAudioPlayer";
-import {
-  getAudioPlaybackClock,
-  getLastAudioProgressCommitTs,
-  resetAudioPlaybackClock,
-  writeAudioPlaybackClock,
-} from "./audioProgressStore";
+import { setAudioModeAsync } from "expo-audio";
 import {
   audioLoadErrorMessage,
   isUnavailableAudioError,
 } from "./audioLoadError";
-import { normalizeAudioSource } from "./normalizeAudioSource";
-import { decidePlaybackTick } from "./playbackStatusTick";
-import {
-  resolveAudioDurationMs,
-  trackDurationToMs,
-} from "./resolveAudioDurationMs";
+import { nativeQueueCanSkip, releaseNativePlaylist, syncNativePlaylist } from "./nativeQueueEngine";
+import { resetAudioPlaybackClock, writeAudioPlaybackClock } from "./audioProgressStore";
+import { trackDurationToMs } from "./resolveAudioDurationMs";
+import { cancelScheduledTrackAdvance } from "./scheduleTrackAdvance";
 import { detachStatusSubscription } from "./statusSubscription";
 import type {
   AudioPlayerGet,
@@ -57,19 +44,11 @@ export function createSetTrack(
     ) => {
       const { soundInstance, currentTrack } = get();
 
-      if (currentTrack && currentTrack.id !== track.id && soundInstance) {
-        try {
-          if (soundInstance.playing) {
-            soundInstance.pause();
-          }
-          detachStatusSubscription(get, set);
-          releaseAudioPlayer(soundInstance);
-        } catch (error) {
-          console.warn("Error stopping previous track:", error);
-        }
-      }
-
-      if (currentTrack?.id === track.id && soundInstance) {
+      if (
+        currentTrack?.id === track.id &&
+        soundInstance &&
+        nativeQueueCanSkip(get().queue)
+      ) {
         try {
           if (soundInstance.isLoaded) {
             if (shouldPlayImmediately) {
@@ -105,24 +84,23 @@ export function createSetTrack(
       // Invalidate the previous engine before its asynchronous teardown. This
       // also makes overlapping setTrack calls deterministic: newest call wins.
       set({ __loadGeneration: loadGeneration });
-
-      if (soundInstance) {
-        try {
-          detachStatusSubscription(get, set);
-          releaseAudioPlayer(soundInstance);
-        } catch (error) {
-          console.warn("Error unloading previous audio:", error);
-        }
-      }
+      cancelScheduledTrackAdvance();
 
       if (get().__loadGeneration !== loadGeneration) return;
 
-      // `setTrack` is the only entry point that builds an engine, so it is the
-      // one place a session legitimately begins.
+      const queued = get().queue;
+      const found = queued.findIndex((item) => item.id === track.id);
+      const tracks = found >= 0 ? queued : [track];
+      const index = found >= 0 ? found : 0;
+      if (found < 0) {
+        set({ queue: tracks, currentIndex: 0 });
+      }
+
       const seededDuration = trackDurationToMs(track.duration);
       resetAudioPlaybackClock(track.id, seededDuration);
       set({
         currentTrack: track,
+        currentIndex: index,
         isPlaying: false,
         isLoading: true,
         isSessionActive: true,
@@ -130,18 +108,18 @@ export function createSetTrack(
         position: 0,
         progress: 0,
         duration: seededDuration,
-        soundInstance: null,
         __loadGeneration: loadGeneration,
         __lastStatusUpdateTs: 0,
       });
 
       try {
-        // First sermon of the session waits for audio mode; later switches play immediately.
         if (!audioModeReady) {
           await ensureAudioSession();
         } else {
           void ensureAudioSession();
         }
+
+        if (get().__loadGeneration !== loadGeneration) return;
 
         try {
           const videoStore =
@@ -151,179 +129,36 @@ export function createSetTrack(
           // no-op
         }
 
-        const source = normalizeAudioSource(track.audioUrl);
-        // 250ms is enough for a progress bar; faster native ticks only
-        // starve the JS thread that play/pause has to run on.
-        const player = createAudioPlayer(source, { updateInterval: 250 });
-        player.muted = get().isMuted;
-        player.loop = false;
-
-        const subscription = player.addListener(
-          "playbackStatusUpdate",
-          (status: AudioStatus) => {
-            if (!status.isLoaded) return;
-
-            const prev = get();
-            // An unloaded player can emit one last callback. It must never
-            // overwrite the position/duration of the track that replaced it.
-            if (
-              prev.__loadGeneration !== loadGeneration ||
-              prev.currentTrack?.id !== track.id
-            ) {
-              return;
-            }
-            if (
-              !status.didJustFinish &&
-              (prev.__ignoreStatusUntil || 0) > Date.now()
-            ) {
-              return;
-            }
-
-            const playerDurationMs = (status.duration || 0) * 1000;
-            const newDuration = resolveAudioDurationMs({
-              playerDurationMs,
-              knownMs: prev.duration,
-              trackDurationSec: prev.currentTrack?.duration,
-            });
-
-            if (status.didJustFinish) {
-              const finishedPosition =
-                newDuration ||
-                (status.currentTime || 0) * 1000 ||
-                prev.duration;
-              const finishedProgress = finishedPosition > 0 ? 1 : 0;
-              const finishedDuration = newDuration || prev.duration;
-              writeAudioPlaybackClock({
-                trackId: track.id,
-                position: finishedPosition,
-                progress: finishedProgress,
-                duration: finishedDuration,
-              });
-              set({
-                isPlaying: false,
-                progress: finishedProgress,
-                position: finishedPosition,
-                duration: finishedDuration,
-              });
-              const st: any = get();
-              if (st.__isAdvancing || st.__completionTimeout) return;
-              set({
-                __isAdvancing: true,
-                __completionTimeout: true,
-              } as any);
-              if (st.__completionTimeoutId) {
-                clearTimeout(st.__completionTimeoutId);
-              }
-              const timeoutId = setTimeout(async () => {
-                try {
-                  await get().next();
-                } finally {
-                  set({
-                    __isAdvancing: false,
-                    __completionTimeout: false,
-                    __completionTimeoutId: null,
-                  } as any);
-                }
-              }, 100);
-              set({ __completionTimeoutId: timeoutId } as any);
-              return;
-            }
-
-            const newPosition = (status.currentTime || 0) * 1000;
-            const newProgress =
-              newDuration > 0
-                ? Math.max(0, Math.min(1, newPosition / newDuration))
-                : 0;
-            const clock = getAudioPlaybackClock();
-            const now = Date.now();
-            const tick = decidePlaybackTick({
-              now,
-              lastCommitTs: getLastAudioProgressCommitTs(),
-              prevPosition: clock.position,
-              nextPosition: newPosition,
-              prevProgress: clock.progress,
-              nextProgress: newProgress,
-              prevPlaying: prev.isPlaying,
-              nextPlaying: status.playing,
-              prevDuration: clock.duration || prev.duration,
-              nextDuration: newDuration,
-            });
-
-            if (
-              !tick.commitPosition &&
-              !tick.playingChanged &&
-              !tick.durationChanged
-            ) {
-              return;
-            }
-
-            if (tick.commitPosition) {
-              writeAudioPlaybackClock(
-                {
-                  trackId: track.id,
-                  position: newPosition,
-                  progress: newProgress,
-                  duration: newDuration || clock.duration,
-                },
-                now
-              );
-            }
-
-            const sessionUpdates: Record<string, unknown> = {};
-            if (tick.playingChanged) {
-              sessionUpdates.isPlaying = status.playing;
-            }
-            if (tick.durationChanged) {
-              sessionUpdates.duration = newDuration;
-              if (!tick.commitPosition) {
-                writeAudioPlaybackClock({
-                  trackId: track.id,
-                  duration: newDuration,
-                });
-              }
-            }
-            if (Object.keys(sessionUpdates).length > 0) {
-              sessionUpdates.__lastStatusUpdateTs = now;
-              set(sessionUpdates as any);
-            }
-          }
-        );
+        const engine = syncNativePlaylist({
+          get,
+          set,
+          tracks,
+          index,
+          play: shouldPlayImmediately,
+          generation: loadGeneration,
+          muted: get().isMuted,
+          repeatMode: get().repeatMode,
+        });
 
         if (
           get().__loadGeneration !== loadGeneration ||
           get().currentTrack?.id !== track.id
         ) {
-          // A newer request won while this remote source was loading.
-          try {
-            subscription.remove();
-          } catch {
-            // ignore
-          }
-          releaseAudioPlayer(player);
           return;
         }
 
-        const loadedDuration = resolveAudioDurationMs({
-          playerDurationMs: (player.duration || 0) * 1000,
-          knownMs: trackDurationToMs(track.duration),
-          trackDurationSec: track.duration,
-        });
+        const loadedDuration = trackDurationToMs(track.duration) || get().duration;
         writeAudioPlaybackClock({
           trackId: track.id,
           duration: loadedDuration,
         });
         set({
-          soundInstance: player,
-          __statusSubscription: subscription,
+          soundInstance: engine,
           isLoading: false,
           loadError: null,
           duration: loadedDuration,
           isPlaying: shouldPlayImmediately,
         });
-
-        if (shouldPlayImmediately) {
-          player.play();
-        }
       } catch (error) {
         if (
           get().__loadGeneration !== loadGeneration ||
@@ -341,6 +176,8 @@ export function createSetTrack(
           );
         }
 
+        detachStatusSubscription(get, set);
+        releaseNativePlaylist();
         const failed = {
           ...(get().__failedTrackIds || {}),
           [track.id]: true as const,

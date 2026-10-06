@@ -5,7 +5,7 @@ import {
   supportsFullScreenPlayer,
 } from "./audioSourcePolicy";
 
-test("hides the bottom mini bar for catalog, feed, and library music", () => {
+test("hides the mini card for catalog music and feed audio", () => {
   assert.equal(shouldHideMiniPlayerForTrack("copyright-free"), true);
   assert.equal(shouldHideMiniPlayerForTrack("feed"), true);
   assert.equal(shouldHideMiniPlayerForTrack("library"), true);

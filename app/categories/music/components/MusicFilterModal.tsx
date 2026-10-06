@@ -68,6 +68,7 @@ export function MusicFilterModal({
             contentContainerStyle={{ paddingHorizontal: 20 }}
           >
             <TouchableOpacity
+              delayPressIn={0}
               onPress={() => {
                 onSelectCategory(null);
                 onClose();
@@ -94,6 +95,7 @@ export function MusicFilterModal({
             {categories.map((category) => (
               <TouchableOpacity
                 key={category}
+                delayPressIn={0}
                 onPress={() => {
                   onSelectCategory(category);
                   onClose();

@@ -1,6 +1,7 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect } from "react";
+import { Platform } from "react-native";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 export const useVideoPlaybackControl = ({
@@ -92,21 +93,26 @@ export const useVideoPlaybackControl = ({
       },
       // expo-video: imperative play/pause for feed and Reels.
       play: async () => {
-        if (!videoRef.current) return;
+        const current = videoRef.current;
+        if (!current || !isExpoVideo) return;
         try {
-          if (isExpoVideo) {
-            const current = videoRef.current;
-            const muted =
-              useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
-            const targetVol = muted ? 0 : 1;
-            // Mute/volume before play — unmuting an already-playing
-            // decoder is what pops on Android.
-            if (current.muted !== muted) current.muted = muted;
-            if (Math.abs((Number(current.volume) || 0) - targetVol) > 0.02) {
-              current.volume = targetVol;
-            }
-            if (!current.playing) current.play();
+          const muted =
+            useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
+          const targetVol = muted ? 0 : 1;
+          if (Platform.OS === "android") {
+            // Do not read muted, volume, or playing. Those getters stall JS
+            // on Android until the main thread answers.
+            current.pause();
+            current.muted = muted;
+            current.volume = targetVol;
+            current.play();
+            return;
           }
+          if (current.muted !== muted) current.muted = muted;
+          if (Math.abs((Number(current.volume) || 0) - targetVol) > 0.02) {
+            current.volume = targetVol;
+          }
+          if (!current.playing) current.play();
         } catch {
           // no-op
         }
@@ -178,12 +184,24 @@ export const useVideoPlaybackControl = ({
       if (shouldPlayThisVideo) {
         const muted =
           useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
-        if (p.muted !== muted) p.muted = muted;
-        const targetVol = muted ? 0 : 1;
-        if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
-          p.volume = targetVol;
+        if (Platform.OS === "android") {
+          p.pause();
+          p.muted = muted;
+          p.volume = muted ? 0 : 1;
+          p.play();
+        } else {
+          if (p.muted !== muted) p.muted = muted;
+          const targetVol = muted ? 0 : 1;
+          if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
+            p.volume = targetVol;
+          }
+          if (!p.playing) p.play();
         }
-        if (!p.playing) p.play();
+      } else if (Platform.OS === "android") {
+        p.muted = true;
+        p.volume = 0;
+        p.pause();
+        setOverlayVisible(videoKey, true);
       } else {
         if (!p.muted) p.muted = true;
         if ((Number(p.volume) || 0) !== 0) p.volume = 0;

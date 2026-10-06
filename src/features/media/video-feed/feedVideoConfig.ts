@@ -59,9 +59,13 @@ export const FEED_WARM_IDLE_MOUNT_COUNT = 0;
 /** Current playing + previous paused + next primed. Hidden tabs still mount 0. */
 export const FEED_HARD_MAX_PLAYERS = 3;
 
-/** Viewability: start autoplay once ~30% of the card is visible. */
-export const FEED_VIDEO_VISIBLE_PERCENT = 30;
-export const FEED_VIDEO_MIN_VIEW_MS = 180;
+/**
+ * A card stays the one playing until less than this much of it is still
+ * on screen. 50% hands playback to the next card around the halfway point
+ * instead of waiting until the previous card has almost left.
+ */
+export const FEED_VIDEO_VISIBLE_PERCENT = 50;
+export const FEED_VIDEO_MIN_VIEW_MS = 0;
 /** Audio sermons start as soon as the card is viewable — no 180ms gate. */
 export const FEED_AUDIO_MIN_VIEW_MS = 0;
 

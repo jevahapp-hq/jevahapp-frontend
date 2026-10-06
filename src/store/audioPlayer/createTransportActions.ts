@@ -1,4 +1,5 @@
 import { playbackClockSnapshot, resetAudioPlaybackClock, writeAudioPlaybackClock } from "./audioProgressStore";
+import { cancelScheduledTrackAdvance } from "./scheduleTrackAdvance";
 import type {
   AudioPlayerGet,
   AudioPlayerSet,
@@ -56,6 +57,7 @@ export function createTransportActions(
     },
 
     pause: async () => {
+      cancelScheduledTrackAdvance();
       const { soundInstance, duration } = get();
       if (soundInstance) {
         try {

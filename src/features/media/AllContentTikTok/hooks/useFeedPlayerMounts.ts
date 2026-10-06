@@ -1,26 +1,28 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Platform } from "react-native";
 import { resolveMediaAudioUrl } from "../../../../shared/audio/mapToAudioTrack";
+import type { MediaItem } from "../../../../shared/types";
 import {
-  detectMediaType,
-  isAudioSermon,
+    detectMediaType,
+    isAudioSermon,
 } from "../../../../shared/utils/mediaTypeDetection";
 import {
-  getBestVideoUrl,
-  getVideoUrlFromMedia,
+    getBestVideoUrl,
+    getVideoUrlFromMedia,
 } from "../../../../shared/utils/videoUrlManager";
 import {
-  FEED_INITIAL_MOUNT_COUNT,
-  FEED_PRELOAD_NEIGHBOR_DISTANCE,
-  FEED_PRELOAD_WARM_DISTANCE,
-  FEED_WARM_IDLE_MOUNT_COUNT,
+    FEED_INITIAL_MOUNT_COUNT,
+    FEED_PRELOAD_NEIGHBOR_DISTANCE,
+    FEED_PRELOAD_WARM_DISTANCE,
+    FEED_WARM_IDLE_MOUNT_COUNT,
 } from "../../video-feed";
 import {
-  areFeedDecodersSuspended,
-  subscribeFeedDecoders,
+    areFeedDecodersSuspended,
+    subscribeFeedDecoders,
 } from "../../video-feed/feedDecoderGate";
-import { warmVideoConnection } from "../utils/videoConnectionWarmer";
+import { prefetchFirstFrames } from "../../video-feed/firstFrameCache";
 import type { FeedRow } from "../types";
-import type { MediaItem } from "../../../../shared/types";
+import { warmVideoConnection } from "../utils/videoConnectionWarmer";
 
 export function useFeedPlayerMounts(options: {
   listData: FeedRow[];
@@ -138,13 +140,37 @@ export function useFeedPlayerMounts(options: {
     ) {
       const activeSeq = seqByKey[currentlyVisibleVideo];
       hot.add(currentlyVisibleVideo);
-      // Keep previous paused and next primed so both scroll directions
-      // show a decoded frame instead of the cover thumbnail.
-      addVideoNeighbors(hot, activeSeq, keyBySeq);
+      // iPhone keeps the previous clip paused and the next ones primed.
+      // Android primes only the next clip (paused on its first frame) so the
+      // swipe lands on video, not a thumbnail. The clip you just left stays
+      // through maxPlayers. More decoders than that and Expo Go closes.
+      if (Platform.OS !== "android") {
+        addVideoNeighbors(hot, activeSeq, keyBySeq);
+      } else {
+        for (let seq = activeSeq + 1; ; seq++) {
+          const item = mediaItemBySeqRef.current[seq];
+          if (!item) break;
+          if (!isFeedVideo(item)) continue;
+          const key = keyBySeq[seq];
+          if (key) hot.add(key);
+          break;
+        }
+      }
       warmSeqRange(activeSeq, FEED_PRELOAD_WARM_DISTANCE);
+      const upcoming: string[] = [];
+      for (let seq = activeSeq + 1; upcoming.length < 3; seq++) {
+        const item = mediaItemBySeqRef.current[seq];
+        if (!item) break;
+        if (!isFeedVideo(item)) continue;
+        const rawUrl = getVideoUrlFromMedia(item);
+        if (rawUrl) upcoming.push(getBestVideoUrl(rawUrl));
+      }
+      prefetchFirstFrames(upcoming, { priority: true });
     } else if (!hasDeterminedVisibilityRef.current) {
       let mounted = 0;
-      for (let i = 0; mounted < FEED_INITIAL_MOUNT_COUNT; i++) {
+      const initialCount =
+        Platform.OS === "android" ? 2 : FEED_INITIAL_MOUNT_COUNT;
+      for (let i = 0; mounted < initialCount; i++) {
         const item = mediaItemBySeqRef.current[i];
         if (!item) break;
         if (!isFeedVideo(item)) continue;

@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { videoKeyMatchesContentId } from "../features/media/video-feed/videoPlayerKey";
@@ -19,6 +20,46 @@ type VideoPlayerRef = {
 };
 
 const videoPlayerRegistry = new Map<string, VideoPlayerRef>();
+
+/**
+ * expo-video setters wait on Android's main thread. Running a whole registry
+ * of them inside a tap or a swipe freezes likes, comments, and the pause
+ * icon. State updates stay synchronous; each native call gets its own turn.
+ */
+const nativePlayerOps: Array<() => void> = [];
+let nativePlayerPump = false;
+
+function enqueueNativePlayerOp(op: () => void): void {
+  // iOS keeps the previous immediate player calls. Deferring them changed
+  // when audio and session work ran and was signing the app out.
+  if (Platform.OS !== "android") {
+    try {
+      op();
+    } catch {
+      // Released native player.
+    }
+    return;
+  }
+  nativePlayerOps.push(op);
+  if (nativePlayerPump) return;
+  nativePlayerPump = true;
+  setTimeout(flushNativePlayerOp, 0);
+}
+
+function flushNativePlayerOp(): void {
+  const op = nativePlayerOps.shift();
+  if (!op) {
+    nativePlayerPump = false;
+    return;
+  }
+  try {
+    op();
+  } catch {
+    // Released native player.
+  }
+  if (nativePlayerOps.length > 0) setTimeout(flushNativePlayerOp, 0);
+  else nativePlayerPump = false;
+}
 
 /** Snapshot from the live player (not Zustand progress, which can lag). */
 export function getVideoPlaybackSnapshot(
@@ -84,6 +125,7 @@ interface VideoPlayerState {
   pauseVideo: (videoKey: string) => void;
   toggleVideo: (videoKey: string) => void;
   pauseAllVideos: () => void;
+  pauseAllExcept: (keepKey: string) => void;
   cleanupAllVideos: () => void;
   toggleVideoMute: (videoKey: string) => void;
   setVideoProgress: (videoKey: string, progress: number) => void;
@@ -131,38 +173,87 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     },
 
     pauseVideo: (videoKey: string) => {
-      // Imperatively pause the video player directly (no state waiting)
-      const player = videoPlayerRegistry.get(videoKey);
-      if (player) {
-        player
-          .pause()
-          .catch((err: any) => console.warn(`Failed to pause ${videoKey}:`, err));
+      const pauseNative = () => {
+        const player = videoPlayerRegistry.get(videoKey);
+        if (!player) return;
+        player.pause().catch(() => {});
         player.showOverlay();
+      };
+      const markPaused = () =>
+        set((state) => ({
+          currentlyPlayingVideo:
+            state.currentlyPlayingVideo === videoKey
+              ? null
+              : state.currentlyPlayingVideo,
+          playingVideos: { ...state.playingVideos, [videoKey]: false },
+          showOverlay: { ...state.showOverlay, [videoKey]: true },
+        }));
+      if (Platform.OS !== "android") {
+        pauseNative();
+        markPaused();
+        return;
       }
-
-      // Update state to reflect the change
-      set((state) => ({
-        currentlyPlayingVideo:
-          state.currentlyPlayingVideo === videoKey
-            ? null
-            : state.currentlyPlayingVideo,
-        playingVideos: { ...state.playingVideos, [videoKey]: false },
-        showOverlay: { ...state.showOverlay, [videoKey]: true },
-      }));
+      // Paint the pause first. The native pause waits on ExoPlayer and used
+      // to freeze the button that requested it.
+      markPaused();
+      enqueueNativePlayerOp(pauseNative);
     },
 
     pauseAllVideos: () => {
-      // Imperatively pause all video players (fire-and-forget, no await)
+      const pauseNative = () => {
+        videoPlayerRegistry.forEach((player) => {
+          player.pause().catch(() => {});
+          player.showOverlay();
+        });
+      };
+      const markPaused = () =>
+        set(() => ({
+          currentlyPlayingVideo: null,
+          playingVideos: {},
+          showOverlay: {},
+        }));
+      if (Platform.OS !== "android") {
+        pauseNative();
+        markPaused();
+        return;
+      }
+      markPaused();
       videoPlayerRegistry.forEach((player) => {
+        enqueueNativePlayerOp(() => {
+          player.pause().catch(() => {});
+          player.showOverlay();
+        });
+      });
+    },
+
+    pauseAllExcept: (keepKey: string) => {
+      const pauseOne = (player: VideoPlayerRef) => {
         player.pause().catch(() => {});
         player.showOverlay();
+      };
+      videoPlayerRegistry.forEach((player, key) => {
+        if (key === keepKey) return;
+        if (Platform.OS !== "android") {
+          pauseOne(player);
+          return;
+        }
+        enqueueNativePlayerOp(() => pauseOne(player));
       });
-
-      set(() => ({
-        currentlyPlayingVideo: null,
-        playingVideos: {},
-        showOverlay: {},
-      }));
+      set((state) => {
+        const playingVideos = { ...state.playingVideos };
+        const showOverlay = { ...state.showOverlay };
+        Object.keys(playingVideos).forEach((key) => {
+          if (key === keepKey) return;
+          playingVideos[key] = false;
+          showOverlay[key] = true;
+        });
+        return {
+          currentlyPlayingVideo:
+            state.currentlyPlayingVideo === keepKey ? keepKey : null,
+          playingVideos,
+          showOverlay,
+        };
+      });
     },
 
     // Thread-safe cleanup function
@@ -265,17 +356,18 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         };
       });
 
-      // Fire-and-forget pause all other videos (no await - instant)
+      // One native call per turn. A synchronous walk of every feed player
+      // on Reels entry stalled the JS thread for the whole decoder handoff.
       videoPlayerRegistry.forEach((player, key) => {
-        if (key !== videoKey) {
+        if (key === videoKey) return;
+        enqueueNativePlayerOp(() => {
           player.pause().catch(() => {});
           player.showOverlay();
-        }
+        });
       });
-
-      // Play target video IMMEDIATELY (no waiting for pauses)
-      const targetPlayer = videoPlayerRegistry.get(videoKey);
-      if (targetPlayer?.play) {
+      enqueueNativePlayerOp(() => {
+        const targetPlayer = videoPlayerRegistry.get(videoKey);
+        if (!targetPlayer?.play) return;
         try {
           const playResult = targetPlayer.play();
           if (playResult instanceof Promise) {
@@ -284,7 +376,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         } catch {
           // no-op
         }
-      }
+      });
     },
 
     // ✅ Toggle function - for cases where toggle behavior is needed

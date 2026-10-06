@@ -34,6 +34,9 @@ export interface MediaItem extends BaseEntity {
   imageUrl?: string | { uri: string };
   thumbnailUrl?: string | { uri: string };
   duration?: number; // Duration in seconds from backend
+  /** Displayed picture size after rotation. Set when the file is uploaded. */
+  videoWidth?: number;
+  videoHeight?: number;
   // Additional fields from API
   likes?: number;
   shares?: number;

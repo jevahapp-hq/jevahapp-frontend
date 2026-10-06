@@ -5,6 +5,7 @@ import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -34,20 +35,28 @@ import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
-import { savePlayhead } from "../../video-feed/playheadCache";
+import { feedStartSeconds, savePlayhead } from "../../video-feed/playheadCache";
 import {
   readPlayerCurrentTimeSec,
   runWithLivePlayer,
 } from "../../video-feed/safeVideoPlayer";
-import { frameForFeedVideo } from "../../video-feed/frameForFeedVideo";
+import { frameForFeedVideo, isNineSixteenAspect } from "../../video-feed/frameForFeedVideo";
 import {
-  peekFeedVideoAspect,
+  layoutAspectFromMedia,
+  videoSourceUrls,
+} from "../../video-feed/displayedVideoAspect";
+import { ensureDisplayedAspect } from "../../video-feed/measureDisplayedAspect";
+import {
+  rememberFeedVideoAspect,
   useFeedVideoAspect,
+  useFeedVideoAspectSettled,
+  useRememberedFeedVideoAspect,
 } from "../../video-feed/useFeedVideoAspect";
 import {
   snapshotPlayerFrame,
   useVideoFrameSnapshot,
 } from "../../video-feed/videoFrameSnapshotCache";
+import { useFirstFrame } from "../../video-feed/firstFrameCache";
 import { isRetryableVideoSourceError } from "../../../../shared/utils/videoUrlManager";
 
 export interface VideoCardPlayerAreaProps {
@@ -95,17 +104,26 @@ function VideoPlayerSlot({
   url?: string | null;
 }) {
   const boxW = Dimensions.get("window").width;
+  const rememberedAspect = useRememberedFeedVideoAspect(url);
   const snapshot = useVideoFrameSnapshot(url ?? null);
-  const posterUri = posterUriFromMedia(video);
+  const firstFrame = useFirstFrame(url);
+  const posterUri = firstFrame ?? posterUriFromMedia(video);
+  useEffect(() => {
+    if (!url) return;
+    const urls = videoSourceUrls(video, url);
+    const stored = layoutAspectFromMedia(video);
+    if (stored != null) {
+      for (const source of urls) rememberFeedVideoAspect(source, stored);
+      return;
+    }
+    ensureDisplayedAspect(url, { allowPlayer: false, also: urls });
+  }, [url, video]);
   const sideSource: ImageSource | null = snapshot
     ? (snapshot as ImageSource)
     : posterUri
       ? { uri: posterUri }
       : null;
-  const fitted = frameForFeedVideo(
-    url ? peekFeedVideoAspect(url) : null,
-    boxW
-  );
+  const fitted = frameForFeedVideo(rememberedAspect, boxW);
   const nineSixteen = fitted.portrait;
   const pictureW = nineSixteen ? fitted.width : boxW;
   const side = nineSixteen
@@ -171,8 +189,14 @@ export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
     return <View style={{ height: 0 }} />;
   }
 
-  if (!shouldRenderPlayer || !videoUrl) {
-    return (
+  // The parked picture stays mounted under the live player. The player is
+  // see-through until its first frame, so the card goes from this picture
+  // straight to the video with no black between.
+  return (
+    <View
+      collapsable={false}
+      style={{ height: FEED_VIDEO_PLAYER_HEIGHT, width: "100%" }}
+    >
       <Pressable
         onPress={() => props.onTogglePlay(contentKey)}
         android_disableSound
@@ -181,15 +205,16 @@ export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
       >
         <VideoPlayerSlot video={video} url={videoUrl} />
       </Pressable>
-    );
-  }
-
-  return (
-    <VideoCardPlayerInner
-      key={contentKey}
-      {...props}
-      videoUrl={videoUrl}
-    />
+      {shouldRenderPlayer && videoUrl ? (
+        <View style={StyleSheet.absoluteFill} collapsable={false}>
+          <VideoCardPlayerInner
+            key={contentKey}
+            {...props}
+            videoUrl={videoUrl}
+          />
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -242,17 +267,18 @@ function VideoCardPlayerInner(
   }, []);
 
   const videoRef = useRef<VideoPlayer | null>(null);
+  const watchedRef = useRef(false);
 
   const {
     player,
     firstFrameReady,
-    nativeFirstFrame,
     handleFirstFrameRender,
     invalidateNativeFirstFrame,
   } = useInstantFeedVideoPlayer({
     source: videoUrl,
     loop: true,
     timeUpdateEventInterval: 0.25,
+    idle: !props.isActive,
   });
 
   useEffect(() => {
@@ -263,7 +289,29 @@ function VideoCardPlayerInner(
   videoRef.current = player;
 
   const measuredAspect = useFeedVideoAspect(player, videoUrl);
-  const frameAspect = measuredAspect ?? peekFeedVideoAspect(videoUrl);
+  const storedAspect = layoutAspectFromMedia(video);
+  useEffect(() => {
+    const urls = videoSourceUrls(video, videoUrl);
+    if (storedAspect != null) {
+      for (const source of urls) rememberFeedVideoAspect(source, storedAspect);
+      return;
+    }
+    ensureDisplayedAspect(videoUrl, { allowPlayer: false, also: urls, priority: true });
+  }, [storedAspect, video, videoUrl]);
+  const measuredSettled = useFeedVideoAspectSettled(videoUrl);
+  const aspectSettled = storedAspect != null || measuredSettled;
+  const frameAspect = storedAspect ?? measuredAspect;
+  const frameKey = !aspectSettled
+    ? "pending"
+    : isNineSixteenAspect(frameAspect)
+      ? "portrait"
+      : "full";
+  const frameKeyRef = useRef(frameKey);
+  useEffect(() => {
+    if (frameKeyRef.current === frameKey) return;
+    frameKeyRef.current = frameKey;
+    invalidateNativeFirstFrame();
+  }, [frameKey, invalidateNativeFirstFrame]);
   const [boxW, setBoxW] = useState(() => Dimensions.get("window").width);
   const fitted =
     boxW > 0 ? frameForFeedVideo(frameAspect, boxW) : null;
@@ -274,7 +322,8 @@ function VideoCardPlayerInner(
       ? Math.max(0, Math.round((boxW - fitted.width) / 2))
       : 0;
   const frameSnapshot = useVideoFrameSnapshot(videoUrl);
-  const posterUri = posterUriFromMedia(video);
+  const firstFrame = useFirstFrame(videoUrl);
+  const posterUri = firstFrame ?? posterUriFromMedia(video);
   const sideSource: ImageSource | null = frameSnapshot
     ? (frameSnapshot as ImageSource)
     : posterUri
@@ -311,14 +360,21 @@ function VideoCardPlayerInner(
         if (!p.muted) p.muted = true;
         if ((Number(p.volume) || 0) !== 0) p.volume = 0;
         const t = readPlayerCurrentTimeSec(p);
-        if (t > 0.15) savePlayhead(videoUrl, t);
-        snapshotPlayerFrame(videoUrl, p, t > 0.15 ? t : undefined);
+        if (t > 0.15) savePlayhead(videoUrl, t, Number(p.duration));
         if (p.playing) p.pause();
+        // The parked card shows this frame, so it has to be the frame the
+        // clip will resume on (0.1s again once it was watched to the end).
+        // Android grabs this over the network while the next card starts.
+        if (watchedRef.current && Platform.OS !== "android") {
+          watchedRef.current = false;
+          snapshotPlayerFrame(videoUrl, p, feedStartSeconds(videoUrl));
+        }
       });
       return;
     }
 
     if (!firstFrameReady) return;
+    watchedRef.current = true;
     runWithLivePlayer(player, (p) => {
       const targetMuted = isMuted;
       const targetVol = isMuted ? 0 : videoVolume;
@@ -494,22 +550,11 @@ function VideoCardPlayerInner(
 
   const openFullscreen = useCallback(() => {
     const t = readPlayerCurrentTimeSec(player);
-    if (t > 0.15) savePlayhead(videoUrl, t);
+    if (t > 0.15) savePlayhead(videoUrl, t, Number(player?.duration));
     onVideoTap(key, video, index);
   }, [videoUrl, player, onVideoTap, key, video, index]);
 
-  if (failedVideoLoad || !player) {
-    return (
-      <Pressable
-        onPress={() => onTogglePlay(key)}
-        android_disableSound
-        accessibilityRole="button"
-        accessibilityLabel="Play or pause video"
-      >
-        <VideoPlayerSlot video={video} url={videoUrl} />
-      </Pressable>
-    );
-  }
+  if (failedVideoLoad || !player) return null;
 
   const showChrome = !hideChrome;
 
@@ -526,7 +571,6 @@ function VideoCardPlayerInner(
       style={{
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
-        backgroundColor: "#000",
       }}
     >
       {nineSixteen && sideSource ? (
@@ -552,25 +596,19 @@ function VideoCardPlayerInner(
               height: FEED_VIDEO_PLAYER_HEIGHT,
             }}
           >
-            <FeedVideoSurface
-              player={player}
-              visible
-              inline
-              useExoShutter={false}
-              width={videoWidth > 0 ? videoWidth : undefined}
-              height={FEED_VIDEO_PLAYER_HEIGHT}
-              contentFit="cover"
-              onFirstFrameRender={handleFirstFrameRender}
-            />
-            {!nativeFirstFrame ? (
-              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                <FeedVideoStill
-                  item={video}
-                  url={videoUrl}
-                  height={FEED_VIDEO_PLAYER_HEIGHT}
-                  contentFit="cover"
-                />
-              </View>
+            {player ? (
+              <FeedVideoSurface
+                key={frameKey === "pending" ? "full" : frameKey}
+                player={player}
+                visible
+                inline
+                transparent
+                useExoShutter={false}
+                width={videoWidth > 0 ? videoWidth : undefined}
+                height={FEED_VIDEO_PLAYER_HEIGHT}
+                contentFit="cover"
+                onFirstFrameRender={handleFirstFrameRender}
+              />
             ) : null}
           </View>
           {sideGap > 0 ? (

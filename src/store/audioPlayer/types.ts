@@ -1,5 +1,23 @@
-import type { AudioPlayer } from "expo-audio";
 import type { StoreApi } from "zustand";
+
+/** Player or native playlist. Both expose the transport the store calls. */
+export type AudioEngine = {
+  playing: boolean;
+  isLoaded: boolean;
+  muted: boolean;
+  duration: number;
+  currentTime?: number;
+  currentIndex?: number;
+  play: () => void;
+  pause: () => void;
+  seekTo: (seconds: number) => Promise<void>;
+  setPlaybackRate: (rate: number, pitchCorrectionQuality?: string) => void;
+  skipTo?: (index: number) => void;
+  destroy?: () => void;
+  remove?: () => void;
+  release?: () => void;
+  clearLockScreenControls?: () => void;
+};
 
 export interface AudioTrack {
   id: string;
@@ -50,7 +68,7 @@ export interface GlobalAudioPlayerState {
   progress: number; // 0-1
 
   // Audio instance
-  soundInstance: AudioPlayer | null;
+  soundInstance: AudioEngine | null;
 
   // Queue (for future playlist support)
   queue: AudioTrack[];

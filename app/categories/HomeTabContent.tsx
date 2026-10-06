@@ -315,7 +315,7 @@ export default function HomeTabContent({
           {selectedCategory === "MUSIC" ? (
             <View style={styles.feedActive} collapsable={false}>
               <CategorySuspense>
-                <Music />
+                <Music active={isTabActive} />
               </CategorySuspense>
             </View>
           ) : null}

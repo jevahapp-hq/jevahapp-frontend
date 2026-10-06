@@ -81,6 +81,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   img: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
 });

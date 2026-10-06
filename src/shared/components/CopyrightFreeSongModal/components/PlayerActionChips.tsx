@@ -32,7 +32,7 @@ function Chip({
 }) {
   const color = active ? activeColor : "#FFFFFF";
   return (
-    <TouchableOpacity
+    <TouchableOpacity delayPressIn={0}
       onPress={onPress}
       disabled={disabled || !onPress}
       activeOpacity={0.75}

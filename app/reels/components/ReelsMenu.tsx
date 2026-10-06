@@ -137,7 +137,8 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
     IconComponent?: any;
   }) => (
     <TouchableOpacity
-      onPress={() => {
+      delayPressIn={0}
+      onPressIn={() => {
         onPress();
         onClose();
       }}
@@ -255,7 +256,8 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
                 Options
               </Text>
               <TouchableOpacity
-                onPress={dismissInstant}
+                delayPressIn={0}
+                onPressIn={dismissInstant}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons

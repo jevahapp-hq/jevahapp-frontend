@@ -1,6 +1,14 @@
 import { releaseAudioPlayer } from "../../shared/audio/releaseAudioPlayer";
 import { getAudioPlaybackClock, resetAudioPlaybackClock, writeAudioPlaybackClock } from "./audioProgressStore";
+import {
+  applyNativeLoop,
+  nativeQueueCanSkip,
+  realignNativePlaylist,
+  skipLoadedQueue,
+} from "./nativeQueueEngine";
 import { pickNextPlayableIndex } from "./queueAdvance";
+import { trackDurationToMs } from "./resolveAudioDurationMs";
+import { cancelScheduledTrackAdvance } from "./scheduleTrackAdvance";
 import { detachStatusSubscription } from "./statusSubscription";
 import type {
   AudioPlayerGet,
@@ -22,6 +30,7 @@ export function createQueueActions(
 > {
   return {
     next: async (opts) => {
+      cancelScheduledTrackAdvance();
       const fromUser = Boolean(opts?.fromUser);
       const { queue, currentIndex, setTrack, repeatMode, duration } = get();
       const clock = getAudioPlaybackClock();
@@ -94,6 +103,31 @@ export function createQueueActions(
       }
 
       if (nextIndex >= 0) {
+        const nextTrack = queue[nextIndex];
+        const engine = get().soundInstance;
+        if (nextTrack && engine?.skipTo && nativeQueueCanSkip(queue)) {
+          const duration = trackDurationToMs(nextTrack.duration);
+          resetAudioPlaybackClock(nextTrack.id, duration);
+          writeAudioPlaybackClock({
+            trackId: nextTrack.id,
+            position: 0,
+            progress: 0,
+            duration,
+          });
+          set({
+            currentIndex: nextIndex,
+            currentTrack: nextTrack,
+            isPlaying: true,
+            isSessionActive: true,
+            isLoading: false,
+            loadError: null,
+            position: 0,
+            progress: 0,
+            duration: duration || get().duration,
+          });
+          skipLoadedQueue(nextIndex);
+          return;
+        }
         set({ currentIndex: nextIndex });
         await setTrack(queue[nextIndex], true);
       } else if (queue.length > 0) {
@@ -124,6 +158,30 @@ export function createQueueActions(
       if (queue.length > 0 && currentIndex > 0) {
         const prevIndex = currentIndex - 1;
         const prevTrack = queue[prevIndex];
+        const engine = get().soundInstance;
+        if (prevTrack && engine?.skipTo && nativeQueueCanSkip(queue)) {
+          const duration = trackDurationToMs(prevTrack.duration);
+          resetAudioPlaybackClock(prevTrack.id, duration);
+          writeAudioPlaybackClock({
+            trackId: prevTrack.id,
+            position: 0,
+            progress: 0,
+            duration,
+          });
+          set({
+            currentIndex: prevIndex,
+            currentTrack: prevTrack,
+            isPlaying: true,
+            isSessionActive: true,
+            isLoading: false,
+            loadError: null,
+            position: 0,
+            progress: 0,
+            duration: duration || get().duration,
+          });
+          skipLoadedQueue(prevIndex);
+          return;
+        }
         set({ currentIndex: prevIndex });
         await setTrack(prevTrack);
         await get().play();
@@ -142,12 +200,38 @@ export function createQueueActions(
       const track = queue[clampedIndex];
       if (!track) return;
 
+      const engine = get().soundInstance;
+      if (engine?.skipTo && nativeQueueCanSkip(queue)) {
+        const duration = trackDurationToMs(track.duration);
+        resetAudioPlaybackClock(track.id, duration);
+        writeAudioPlaybackClock({
+          trackId: track.id,
+          position: 0,
+          progress: 0,
+          duration,
+        });
+        set({
+          currentIndex: clampedIndex,
+          currentTrack: track,
+          isPlaying: true,
+          isSessionActive: true,
+          isLoading: false,
+          loadError: null,
+          position: 0,
+          progress: 0,
+          duration: duration || get().duration,
+        });
+        skipLoadedQueue(clampedIndex);
+        return;
+      }
+
       set({ currentIndex: clampedIndex });
       await setTrack(track);
       await get().play();
     },
 
     clear: async () => {
+      cancelScheduledTrackAdvance();
       const sound = get().soundInstance;
       detachStatusSubscription(get, set);
       resetAudioPlaybackClock();
@@ -176,6 +260,7 @@ export function createQueueActions(
 
     setRepeatMode: (mode: "none" | "all" | "one") => {
       set({ repeatMode: mode });
+      applyNativeLoop(mode);
     },
 
     toggleShuffle: () => {
@@ -252,6 +337,7 @@ export function createQueueActions(
           });
         }
       }
+      realignNativePlaylist(get, set);
     },
   };
 }

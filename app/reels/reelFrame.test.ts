@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { FEED_VIDEO_PLAYER_HEIGHT } from "../../src/features/media/video-feed/feedVideoConfig.ts";
+import { frameForFeedVideo } from "../../src/features/media/video-feed/frameForFeedVideo.ts";
 import {
-  categoryCardFrame,
   reelDisplayFrame,
   reelFrameNeedsBackdrop,
   reelSharpFit,
+  swappedPortraitFeedFrame,
 } from "./reelFrame.ts";
 import { peekReelImageAspect, reelImageUri, rememberReelImageAspect } from "./reelMedia.ts";
 
@@ -20,36 +21,25 @@ test("9:16 video fills a phone reel", () => {
   assert.equal(reelSharpFit(frame), "cover");
 });
 
-test("a taller phone video stays centered for a snapshot above and below", () => {
-  const frame = reelDisplayFrame(PHONE.width / PHONE.height, PHONE.width, PHONE.height);
-  const card = categoryCardFrame(PHONE.width, PHONE.height);
-  assert.equal(frame.contentFit, "cover");
-  assert.equal(frame.width, card.width);
-  assert.equal(frame.height, card.height);
+test("a non-portrait reel uses the feed portrait frame turned sideways", () => {
+  const portrait = frameForFeedVideo(9 / 16, PHONE.width);
+  assert.equal(portrait.height, FEED_VIDEO_PLAYER_HEIGHT);
+  const frame = reelDisplayFrame(16 / 9, PHONE.width, PHONE.height);
+  assert.equal(frame.width, PHONE.width);
+  assert.equal(
+    frame.height,
+    Math.round(portrait.width * (PHONE.width / portrait.height))
+  );
   assert.equal(reelFrameNeedsBackdrop(frame, PHONE.width, PHONE.height), true);
 });
 
-test("a square or 4:5 clip stays centered instead of filling the reel", () => {
-  for (const aspect of [1, 1.03, 4 / 5]) {
+test("square, 4:5, and wide clips share that turned portrait frame", () => {
+  const expected = swappedPortraitFeedFrame(PHONE.width, PHONE.height);
+  for (const aspect of [1, 1.03, 4 / 5, 16 / 9, 4 / 3, PHONE.width / PHONE.height]) {
     const frame = reelDisplayFrame(aspect, PHONE.width, PHONE.height);
-    const card = categoryCardFrame(PHONE.width, PHONE.height);
+    assert.equal(frame.width, expected.width);
+    assert.equal(frame.height, expected.height);
     assert.equal(frame.contentFit, "cover");
-    assert.equal(frame.width, card.width);
-    assert.equal(frame.height, card.height);
-    assert.equal(reelFrameNeedsBackdrop(frame, PHONE.width, PHONE.height), true);
-  }
-});
-
-test("wide videos keep the category card", () => {
-  for (const aspect of [16 / 9, 4 / 3]) {
-    const frame = reelDisplayFrame(aspect, PHONE.width, PHONE.height);
-    const card = categoryCardFrame(PHONE.width, PHONE.height);
-    assert.equal(frame.contentFit, "cover");
-    assert.equal(frame.width, card.width);
-    assert.equal(frame.height, card.height);
-    assert.equal(frame.width, PHONE.width);
-    assert.equal(frame.height, FEED_VIDEO_PLAYER_HEIGHT);
-    assert.equal(reelFrameNeedsBackdrop(frame, PHONE.width, PHONE.height), true);
     assert.equal(reelSharpFit(frame), "cover");
   }
 });
@@ -62,11 +52,16 @@ test("9:16 fills the reel even when the window is landscape", () => {
   assert.equal(reelFrameNeedsBackdrop(frame, 844, 390), false);
 });
 
-test("a short reel does not grow the category card past the screen", () => {
+test("a short screen still keeps the turned portrait frame inside the reel", () => {
   const frame = reelDisplayFrame(16 / 9, 800, 300);
-  assert.equal(frame.width, 800);
-  assert.equal(frame.height, 300);
-  assert.equal(frame.contentFit, "cover");
+  const fitted = swappedPortraitFeedFrame(800, 300);
+  assert.equal(frame.width, fitted.width);
+  assert.equal(frame.height, fitted.height);
+  assert.ok(frame.width <= 800);
+  assert.ok(frame.height <= 300);
+  const portrait = frameForFeedVideo(9 / 16, 800);
+  assert.equal(frame.width, portrait.height);
+  assert.equal(frame.height, portrait.width);
 });
 
 test("unknown aspect fills the reel so a 9:16 clip is not letterboxed", () => {

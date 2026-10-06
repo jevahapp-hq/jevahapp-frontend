@@ -34,8 +34,9 @@ import { resolveReelsStartIndex } from "../../../src/features/media/video-feed";
 import { normalizeDurationMs } from "../../../src/shared/media/normalizeDurationMs";
 import { isForgottenMedia } from "../../../src/shared/media/ownUploads";
 import { localMediaIds } from "../../utils/mediaDelete/mediaDeleteIds";
-import { setAndroidAudibleReel } from "../reelAudible";
-
+import { setAndroidAudibleReel, setReelManualPause } from "../reelAudible";
+import { silenceReelPlayersExcept } from "../reelPlayerQueue";
+import { getReelPositionMs } from "../reelPlayheadStore";
 /**
  * useReelsOrchestrator - The "Master Hook" for the Reels feature.
  * Consolidates all sub-hooks and logic into a single clean API.
@@ -266,10 +267,10 @@ export function useReelsOrchestrator() {
         // Basic trigger logic if needed
     }, []);
 
-    const videoPositionRef = useRef(videoPosition);
-    videoPositionRef.current = videoPosition;
+    const modalKeyRef = useRef(current.modalKey);
+    modalKeyRef.current = current.modalKey;
     const getVideoPositionMs = useCallback(
-        () => videoPositionRef.current,
+        () => getReelPositionMs(modalKeyRef.current),
         []
     );
 
@@ -352,19 +353,45 @@ export function useReelsOrchestrator() {
 
     const toggleVideoPlay = useCallback((key?: string) => {
         const target = key || current.modalKey;
+        const player = videoRefs.current[target];
         const isPlaying = useGlobalVideoStore.getState().playingVideos[target] ?? false;
         if (isPlaying) {
+            // Stop the picture on this tap. The store pause waits a turn on
+            // Android, which is why the reel kept playing after the press.
+            setReelManualPause(target);
+            if (player) {
+                try {
+                    player.muted = true;
+                    player.volume = 0;
+                    player.pause();
+                } catch {
+                    // Released native player.
+                }
+            }
             pauseVideo(target);
             setUserHasManuallyPaused(true);
             setShowPauseOverlay(true);
             setTimeout(() => setShowPauseOverlay(false), 1000);
-        } else {
-            setAndroidAudibleReel(target);
-            playVideoGlobally(target);
-            setUserHasManuallyPaused(false);
-            setShowPauseOverlay(false);
+            return;
         }
-    }, [current.modalKey, pauseVideo, playVideoGlobally]);
+        setReelManualPause(null);
+        setAndroidAudibleReel(target);
+        silenceReelPlayersExcept(target, videoRefs.current);
+        if (player) {
+            try {
+                const muted = useGlobalVideoStore.getState().mutedVideos[target] ?? false;
+                player.pause();
+                player.muted = muted;
+                player.volume = muted ? 0 : 1;
+                player.play();
+            } catch {
+                // Released native player.
+            }
+        }
+        useGlobalVideoStore.getState().playVideo(target);
+        setUserHasManuallyPaused(false);
+        setShowPauseOverlay(false);
+    }, [current.modalKey, pauseVideo, videoRefs]);
 
     // Memoized: a fresh array literal here re-created the FlatList `data` and
     // the prefetch dep on every render, turning any single state tick into a

@@ -25,11 +25,11 @@ test("9:16 is recognized and nearby ratios are not", () => {
   assert.equal(isNineSixteenAspect(null), false);
 });
 
-test("an unknown ratio uses the 9:16 column until a real ratio arrives", () => {
+test("an unknown ratio covers the full card", () => {
   const frame = frameForFeedVideo(null, 390);
-  assert.equal(frame.portrait, true);
+  assert.equal(frame.portrait, false);
   assert.equal(frame.height, FEED_VIDEO_PLAYER_HEIGHT);
-  assert.equal(frame.width, Math.round(FEED_VIDEO_PLAYER_HEIGHT * (9 / 16)));
+  assert.equal(frame.width, 390);
 });
 
 test("9:16 stays full height and narrower than the card", () => {

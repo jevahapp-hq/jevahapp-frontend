@@ -6,8 +6,8 @@ export default function ReelsLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        gestureEnabled: true,
-        fullScreenGestureEnabled: true,
+        gestureEnabled: Platform.OS === "ios",
+        fullScreenGestureEnabled: false,
         animation: Platform.OS === "ios" ? "slide_from_right" : "none",
         contentStyle: { backgroundColor: "#000" },
       }}

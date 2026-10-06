@@ -117,19 +117,23 @@ export function useReelsHandlers({
         active?._id || (active as any)?.id || contentIdForHooks || ""
       ).trim();
       const visibleKey = useGlobalVideoStore.getState().currentlyVisibleVideo;
-      const snap =
-        getVideoPlaybackSnapshot(modalKey) ||
-        (contentId
-          ? getVideoPlaybackSnapshot(
-              resolveRegisteredVideoKey(contentId) || ""
-            )
-          : null) ||
-        (visibleKey ? getVideoPlaybackSnapshot(visibleKey) : null);
       const prev = reels.resumePlayback;
       const liveMs = getVideoPositionMs?.() ?? 0;
+      // The snapshot reads currentTime, which stalls Android. The reel
+      // playhead is already published on each time update.
+      const snap =
+        liveMs > 0
+          ? null
+          : getVideoPlaybackSnapshot(modalKey) ||
+            (contentId
+              ? getVideoPlaybackSnapshot(
+                  resolveRegisteredVideoKey(contentId) || ""
+                )
+              : null) ||
+            (visibleKey ? getVideoPlaybackSnapshot(visibleKey) : null);
       const positionMs =
-        snap?.currentMs ??
         (liveMs > 0 ? liveMs : undefined) ??
+        snap?.currentMs ??
         (prev?.contentId && String(prev.contentId) === contentId
           ? prev.positionMs
           : 0) ??
@@ -284,7 +288,11 @@ export function useReelsHandlers({
 
   const handleComment = useCallback(
     (key: string) => {
-      const commentContentId = contentIdForHooks || contentId || key;
+      const fromKey =
+        key.startsWith("reel-") && !key.startsWith("reel-index-")
+          ? key.slice("reel-".length)
+          : "";
+      const commentContentId = fromKey || contentIdForHooks || contentId || key;
       const speakerName =
         typeof currentVideo?.speaker === "string"
           ? currentVideo.speaker

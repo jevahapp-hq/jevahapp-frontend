@@ -15,20 +15,45 @@ import {
   useInstantFeedVideoPlayer,
 } from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
-import { useFeedVideoAspect, peekFeedVideoAspect } from "../../../src/features/media/video-feed/useFeedVideoAspect";
-import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
+import {
+  peekFeedVideoAspect,
+  useFeedVideoAspect,
+} from "../../../src/features/media/video-feed/useFeedVideoAspect";
+import {
+  snapshotPlayerFrame,
+  useVideoFrameSnapshot,
+} from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
 import { reelDisplayFrame, reelFrameNeedsBackdrop } from "../reelFrame";
+import {
+  enqueueReelPlayerJob,
+  reelPlayerCommandQuiet,
+  silenceReelPlayersExcept,
+} from "../reelPlayerQueue";
+import {
+  publishReelPlayhead,
+  reelResumeSeekSeconds,
+} from "../reelPlayheadStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
-import { androidReelMayHear, getAudibleReel, subscribeAudibleReel } from "../reelAudible";
+import {
+  androidReelMayHear,
+  getAudibleReel,
+  reelManuallyPaused,
+  reelSoundStopped,
+  subscribeAudibleReel,
+} from "../reelAudible";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 interface ReelsVideoPlayerProps {
   videoKey: string;
   contentId: string;
   videoUrl: string;
+  posterUri?: string | null;
   screenHeight: number;
   screenWidth: number;
   isActive: boolean;
+  /** The next page. It stays decoded and silent so the swipe is instant. */
+  warmNext?: boolean;
   isMuted: boolean;
   videoVolume: number;
   isPlaying: boolean;
@@ -45,26 +70,55 @@ interface ReelsVideoPlayerProps {
   triggerHapticFeedback: () => void;
 }
 
+/** The reel you scrolled off must stop. Mute alone leaves its audio running. */
+function silenceKeepingFrame(player: VideoPlayer, _key: string): void {
+  player.muted = true;
+  player.volume = 0;
+  player.pause();
+}
+
+function hearReel(
+  player: VideoPlayer,
+  key: string,
+  endedRef: MutableRefObject<boolean>,
+  muted: boolean,
+  volume: number
+): void {
+  const restartAt = reelResumeSeekSeconds(endedRef.current);
+  if (restartAt != null) {
+    endedRef.current = false;
+    player.currentTime = restartAt;
+    publishReelPlayhead(key, restartAt * 1000);
+  }
+  // Pause first so this player takes the audio session from the one you left.
+  // Unmuting a decoder that is already playing leaves this clip silent.
+  player.pause();
+  player.muted = muted;
+  player.volume = muted ? 0 : volume;
+  player.play();
+}
+
 const ReelsVideoPlayer = memo(
   ({
     videoKey,
     contentId,
     videoUrl,
+    posterUri: _posterUri,
     screenHeight,
     screenWidth,
     isActive,
+    warmNext = false,
     isMuted,
     videoVolume,
     isPlaying,
     videoRefs,
     onToggleVideoPlay: _onToggleVideoPlay,
     setVideoDuration,
-    setVideoPosition,
-    setLocalPosition,
+    setVideoPosition: _setVideoPosition,
     setLocalDuration,
     isDragging,
     globalVideoStore,
-    showPauseOverlay,
+    showPauseOverlay: _showPauseOverlay,
     getResponsiveSize,
     triggerHapticFeedback: _triggerHapticFeedback,
   }: ReelsVideoPlayerProps) => {
@@ -95,18 +149,26 @@ const ReelsVideoPlayer = memo(
      */
     const lastPushedPositionRef = useRef(-1);
     const lastPushedDurationRef = useRef(-1);
-    const audibleKey = useSyncExternalStore(
+    const handedThisReel = useSyncExternalStore(
       subscribeAudibleReel,
-      getAudibleReel,
-      getAudibleReel
+      () => {
+        const key = getAudibleReel();
+        if (key == null) return isActive && androidReelMayHear(videoKey);
+        return key === videoKey;
+      },
+      () => isActive && androidReelMayHear(videoKey)
     );
     const shouldHearRef = useRef(false);
-    shouldHearRef.current =
-      isActive &&
-      isPlaying &&
-      (audibleKey == null
-        ? androidReelMayHear(videoKey)
-        : audibleKey === videoKey);
+    const resumeAtRef = useRef(0);
+    const endedRef = useRef(false);
+    const warmNextRef = useRef(warmNext);
+    warmNextRef.current = warmNext;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
+    const volumeRef = useRef(videoVolume);
+    volumeRef.current = videoVolume;
+    const nativeFirstFrameRef = useRef(false);
+    const durationSecRef = useRef(0);
 
     const {
       player,
@@ -120,10 +182,14 @@ const ReelsVideoPlayer = memo(
       // the frame is visible clears the surface and leaves Reels black.
       restorePlayhead: true,
       timeUpdateEventInterval: 0.25,
-      // Only the page on screen may decode. A neighbor that keeps play()
-      // running holds ExoPlayer, so the visible reel stays on a frozen frame.
-      mutedPrime: isActive,
+      // Every mounted reel keeps a decoder. Sound is decided below.
+      // Pausing the page you left is what turned the next swipe black.
+      mutedPrime: true,
+      idle: !isActive,
+      nonBlockingSeekCheck: true,
+      revealDelayMs: 32,
     });
+    nativeFirstFrameRef.current = nativeFirstFrame;
 
     playerRef.current = player;
     const measuredAspect = useFeedVideoAspect(player, videoUrl);
@@ -132,15 +198,16 @@ const ReelsVideoPlayer = memo(
       screenWidth,
       screenHeight
     );
+    // Before the list re-renders, the scroll handoff is the source of truth.
+    // Once this page is active, a tap pause (`isPlaying` false) must stick.
+    const shouldHear = handedThisReel && (isActive ? isPlaying : true);
+    shouldHearRef.current = shouldHear;
     const showSnapshotBands = reelFrameNeedsBackdrop(
       fitted,
       screenWidth,
       screenHeight
     );
     const heldFrame = useVideoFrameSnapshot(videoUrl);
-    const snapshotUri = videoUrl.includes("/upload/")
-      ? `${videoUrl.replace("/upload/", "/upload/so_1/")}.jpg`
-      : null;
     const frameTop = Math.max(0, Math.round((screenHeight - fitted.height) / 2));
     const frameLeft = Math.max(0, Math.round((screenWidth - fitted.width) / 2));
     useVideoPlaybackControl({
@@ -160,89 +227,188 @@ const ReelsVideoPlayer = memo(
       }
       return () => {
         delete videoRefs.current[videoKey];
+        const leaving = player;
+        enqueueReelPlayerJob(videoKey, "pause", () => {
+          try {
+            leaving.muted = true;
+            leaving.volume = 0;
+            leaving.pause();
+          } catch {
+            // Released native player.
+          }
+        });
       };
     }, [player, videoKey, videoRefs]);
 
     useEffect(() => {
       if (!player) return;
-
-      const applyAudibleState = () => {
+      const key = videoKey;
+      // Pauses run before plays, and the call itself waits until after paint,
+      // so the like and pause buttons are not stuck behind ExoPlayer.
+      if (!shouldHear) {
+        const warming = warmNextRef.current && !nativeFirstFrameRef.current;
+        enqueueReelPlayerJob(key, warming ? "warm" : "pause", () => {
+          if (shouldHearRef.current) return;
+          try {
+            silenceKeepingFrame(player, key);
+          } catch {
+            // Released native player.
+          }
+        });
+        return;
+      }
+      enqueueReelPlayerJob(key, "hear", () => {
+        if (!shouldHearRef.current || reelManuallyPaused(key)) {
+          try {
+            silenceKeepingFrame(player, key);
+          } catch {
+            // Released native player.
+          }
+          return;
+        }
         try {
-          const shouldHear =
-            isActive &&
-            isPlaying &&
-            (audibleKey == null
-              ? androidReelMayHear(videoKey)
-              : audibleKey === videoKey);
-          if (!shouldHear) {
-            // Mute does not release ExoPlayer's audio track. A reel that is
-            // no longer the one on screen, or that was tapped to pause, has
-            // to stop or the next page never gets the decoder.
-            player.muted = true;
-            player.volume = 0;
-            if (player.playing) player.pause();
-            return;
+          silenceReelPlayersExcept(key, videoRefs.current);
+          hearReel(
+            player,
+            key,
+            endedRef,
+            isMutedRef.current,
+            volumeRef.current
+          );
+        } catch {
+          // Released native player.
+        }
+        // The reel you left can reclaim the audio session. Take it back
+        // without starting that clip again.
+        setTimeout(() => {
+          if (!shouldHearRef.current || reelManuallyPaused(key)) return;
+          if (getAudibleReel() !== key || reelSoundStopped()) return;
+          try {
+            silenceReelPlayersExcept(key, videoRefs.current);
+            const wantMuted = isMutedRef.current;
+            player.muted = wantMuted;
+            player.volume = wantMuted ? 0 : volumeRef.current;
+            player.play();
+          } catch {
+            // Released native player.
           }
-          const wantMuted = isMuted;
-          const wantVol = isMuted ? 0 : videoVolume;
-          // Set mute/volume while paused, then play once. Unmuting a
-          // decoder that is already playing is the Android crackle.
-          if (player.muted !== wantMuted) player.muted = wantMuted;
-          if (Math.abs((Number(player.volume) || 0) - wantVol) > 0.02) {
-            player.volume = wantVol;
-          }
-          if (!player.playing) player.play();
-          // ExoPlayer often ignores play() while the reel you left is still
-          // stopping. One more attempt on the next frame starts this page.
-          requestAnimationFrame(() => {
-            if (!shouldHearRef.current) return;
+        }, 32);
+      });
+    }, [player, shouldHear, isMuted, videoVolume, videoKey]);
+
+    useEffect(() => {
+      if (!player) return;
+      const apply = () => {
+        const key = videoKey;
+        const hear = getAudibleReel() === key && !reelManuallyPaused(key);
+        if (!hear) {
+          enqueueReelPlayerJob(key, "pause", () => {
+            if (getAudibleReel() === key) return;
             try {
-              if (!player.playing) player.play();
+              silenceKeepingFrame(player, key);
             } catch {
               // Released native player.
             }
           });
-        } catch {
-          // no-op
+          return;
         }
+        enqueueReelPlayerJob(key, "hear", () => {
+          if (getAudibleReel() !== key || reelManuallyPaused(key)) return;
+          try {
+            silenceReelPlayersExcept(key, videoRefs.current);
+            hearReel(
+              player,
+              key,
+              endedRef,
+              isMutedRef.current,
+              volumeRef.current
+            );
+          } catch {
+            // Released native player.
+          }
+        });
       };
+      return subscribeAudibleReel(apply);
+    }, [player, videoKey]);
 
-      applyAudibleState();
-    }, [
-      player,
-      isActive,
-      isPlaying,
-      isMuted,
-      videoVolume,
-      videoKey,
-      audibleKey,
-    ]);
+    useEffect(() => {
+      if (!player || !shouldHear || !nativeFirstFrame) return;
+      const grab = () => snapshotPlayerFrame(videoUrl, player);
+      const first = setTimeout(grab, 400);
+      const interval = setInterval(grab, 2000);
+      return () => {
+        clearTimeout(first);
+        clearInterval(interval);
+      };
+    }, [player, shouldHear, nativeFirstFrame, videoUrl]);
 
     useEffect(() => {
       if (!player) return;
       let sub: { remove: () => void } | undefined;
       try {
         sub = player.addListener("playingChange", ({ isPlaying: nativePlaying }) => {
-          if (nativePlaying) {
-            if (shouldHearRef.current) return;
+          const handedHere = getAudibleReel() === videoKey;
+          if (nativePlaying && !handedHere && getAudibleReel() != null) {
             try {
-              player.muted = true;
-              player.volume = 0;
-              player.pause();
+              silenceKeepingFrame(player, videoKey);
             } catch {
               // Released native player.
             }
             return;
           }
-          // Android releases the surface when the title and buttons attach,
-          // and ExoPlayer pauses. The reel on screen keeps playing on iPhone.
-          if (!shouldHearRef.current) return;
-          requestAnimationFrame(() => {
-            if (!shouldHearRef.current) return;
-            const audible = getAudibleReel();
-            if (audible && audible !== videoKey) return;
+          // Our own pause/play echoes back through this event. Handling it
+          // inline called pause() again and stalled the button that was tapped.
+          if (reelPlayerCommandQuiet()) return;
+          if (nativePlaying) {
+            if (
+              handedHere ||
+              (getAudibleReel() == null &&
+                shouldHearRef.current &&
+                !reelSoundStopped())
+            ) {
+              return;
+            }
+            enqueueReelPlayerJob(videoKey, "pause", () => {
+              if (getAudibleReel() === videoKey) return;
+              if (shouldHearRef.current && !reelSoundStopped()) return;
+              try {
+                silenceKeepingFrame(player, videoKey);
+              } catch {
+                // Released native player.
+              }
+            });
+            return;
+          }
+          // Android drops the surface when the title and buttons attach,
+          // and ExoPlayer pauses. A tap pause sets the manual flag first,
+          // so this must not start the clip again.
+          if (reelSoundStopped()) return;
+          if (getAudibleReel() != null && !handedHere) return;
+          if (!shouldHearRef.current && !handedHere) return;
+          if (reelManuallyPaused(videoKey)) return;
+          if (
+            isActiveRef.current &&
+            useGlobalVideoStore.getState().playingVideos[videoKey] === false
+          ) {
+            return;
+          }
+          const now = Date.now();
+          if (now - resumeAtRef.current < 80) return;
+          resumeAtRef.current = now;
+          enqueueReelPlayerJob(videoKey, "hear", () => {
+            const audibleNow = getAudibleReel();
+            if (reelSoundStopped()) return;
+            if (audibleNow != null && audibleNow !== videoKey) return;
+            if (!shouldHearRef.current && audibleNow !== videoKey) return;
+            if (reelManuallyPaused(videoKey)) return;
+            if (
+              isActiveRef.current &&
+              useGlobalVideoStore.getState().playingVideos[videoKey] === false
+            ) {
+              return;
+            }
             try {
-              if (!player.playing) player.play();
+              player.play();
             } catch {
               // Released native player.
             }
@@ -258,7 +424,7 @@ const ReelsVideoPlayer = memo(
           // Released native player.
         }
       };
-    }, [player]);
+    }, [player, videoKey]);
 
     useEffect(() => {
       if (!player) return;
@@ -276,8 +442,6 @@ const ReelsVideoPlayer = memo(
         setCachedDurationMs(contentId, durationMs);
       };
 
-      if (player.duration > 0) applyDuration(player.duration);
-
       const statusSub = player.addListener("statusChange", ({ status, error }) => {
         if (status === "error" || error) {
           // HLS + useCaching throws on iOS; the player retries without cache.
@@ -286,32 +450,42 @@ const ReelsVideoPlayer = memo(
           globalVideoStore.pauseVideo(videoKey);
           return;
         }
-        if (status === "readyToPlay" && player.duration > 0) {
-          applyDuration(player.duration);
+        if (status === "readyToPlay" && durationSecRef.current <= 0) {
+          try {
+            const next = Number(player.duration);
+            if (next > 0) {
+              durationSecRef.current = next;
+              applyDuration(next);
+            }
+          } catch {
+            // Released native player.
+          }
         }
       });
 
       const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
-        if (!isActiveRef.current) return;
-        const durationSec = Number(player.duration) || 0;
-        const positionMs = Math.max(0, (currentTime || 0) * 1000);
-        const durationMs = durationSec * 1000;
+        const seconds = currentTime || 0;
+        if (seconds > 0.5) endedRef.current = false;
+        const onThisPage =
+          isActiveRef.current || getAudibleReel() === videoKey;
+        if (!onThisPage) return;
+        const positionMs = Math.max(0, seconds * 1000);
+        const durationMs = durationSecRef.current * 1000;
         const dragging = isDraggingRef.current;
 
         if (!dragging) {
-          setLocalPosition(positionMs);
+          publishReelPlayhead(videoKey, positionMs, durationMs || undefined);
         }
 
         const now = Date.now();
-        if (now - lastUpdateRef.current > 400) {
+        if (now - lastUpdateRef.current > 1000) {
           lastUpdateRef.current = now;
-          if (durationMs > 0) applyDuration(durationSec);
+          if (durationMs > 0) applyDuration(durationSecRef.current);
           if (
             !dragging &&
             Math.abs(positionMs - lastPushedPositionRef.current) > 1000
           ) {
             lastPushedPositionRef.current = positionMs;
-            setVideoPosition(positionMs);
           }
           const pct = durationMs > 0 ? (positionMs / durationMs) * 100 : 0;
           globalVideoStore.setVideoProgress(videoKey, pct);
@@ -319,7 +493,7 @@ const ReelsVideoPlayer = memo(
 
         if (
           !hasTrackedViewRef.current &&
-          player.playing &&
+          shouldHearRef.current &&
           durationMs > 0
         ) {
           const progress = durationMs > 0 ? positionMs / durationMs : 0;
@@ -352,8 +526,9 @@ const ReelsVideoPlayer = memo(
       });
 
       const endSub = player.addListener("playToEnd", () => {
-        // loop={true} already restarts. Do not seek/play/haptic here —
-        // those crack the loop point.
+        // The live player stays mounted. The next time this page is audible
+        // it restarts at 0.1s instead of reloading from a thumbnail.
+        endedRef.current = true;
       });
 
       return () => {
@@ -369,9 +544,7 @@ const ReelsVideoPlayer = memo(
       contentId,
       globalVideoStore,
       setLocalDuration,
-      setLocalPosition,
       setVideoDuration,
-      setVideoPosition,
     ]);
 
     const surfaceStyle = {
@@ -387,10 +560,8 @@ const ReelsVideoPlayer = memo(
         style={[styles.host, surfaceStyle]}
         collapsable={false}
       >
-        {showSnapshotBands && (heldFrame || snapshotUri) ? (
-          <DarkSnapshotFill
-            source={heldFrame || { uri: snapshotUri as string }}
-          />
+        {showSnapshotBands && heldFrame ? (
+          <DarkSnapshotFill source={heldFrame} />
         ) : null}
         <View
           pointerEvents="box-none"
@@ -407,7 +578,9 @@ const ReelsVideoPlayer = memo(
             {player && fitted.width > 0 && fitted.height > 0 ? (
               <FeedVideoSurface
                 inline
-                useExoShutter={false}
+                visible
+                transparent={false}
+                useExoShutter={Platform.OS === "android"}
                 player={player}
                 width={fitted.width}
                 height={fitted.height}
@@ -415,18 +588,18 @@ const ReelsVideoPlayer = memo(
                 onFirstFrameRender={handleFirstFrameRender}
               />
             ) : null}
-            {!nativeFirstFrame && (heldFrame || snapshotUri) ? (
+            {heldFrame && !nativeFirstFrame ? (
               <Image
-                source={heldFrame || { uri: snapshotUri as string }}
+                source={heldFrame}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
-                cachePolicy="memory-disk"
-                pointerEvents="none"
+                cachePolicy="memory"
+                priority="high"
               />
             ) : null}
         </View>
 
-        {isActive && player && nativeFirstFrame && !isPlaying && (
+        {isActive && reelManuallyPaused(videoKey) && !isPlaying && (
           <View
             pointerEvents="none"
             style={[styles.overlay, { top: iconTop, height: iconSize }]}
@@ -438,30 +611,18 @@ const ReelsVideoPlayer = memo(
             />
           </View>
         )}
-
-        {isActive && player && showPauseOverlay && isPlaying && (
-          <View
-            pointerEvents="none"
-            style={[styles.overlay, { top: iconTop, height: iconSize }]}
-          >
-            <MaterialIcons
-              name="pause"
-              size={iconSize}
-              color="rgba(255, 255, 255, 0.6)"
-            />
-          </View>
-        )}
       </View>
     );
   },
   (prev, next) =>
     prev.videoUrl === next.videoUrl &&
+    prev.posterUri === next.posterUri &&
     prev.screenHeight === next.screenHeight &&
     prev.screenWidth === next.screenWidth &&
     prev.isActive === next.isActive &&
+    prev.warmNext === next.warmNext &&
     prev.isMuted === next.isMuted &&
     prev.isPlaying === next.isPlaying &&
-    prev.showPauseOverlay === next.showPauseOverlay &&
     prev.isDragging === next.isDragging
 );
 
@@ -469,7 +630,7 @@ export default ReelsVideoPlayer;
 
 const styles = StyleSheet.create({
   host: {
-    backgroundColor: "transparent",
+    backgroundColor: "#000",
     position: "relative",
     overflow: "hidden",
   },

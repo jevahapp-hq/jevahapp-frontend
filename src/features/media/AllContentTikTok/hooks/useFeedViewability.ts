@@ -9,8 +9,8 @@ import {
   FEED_VIDEO_VISIBLE_PERCENT,
 } from "../../video-feed";
 import type { FeedRow } from "../types";
-/** Long enough to skip videos a flick only passes through, short enough to feel instant. */
-const PLAY_SWITCH_MS = 48;
+/** Backup if the list stops and viewability never fires again. */
+const SCROLL_SETTLE_MS = 32;
 
 function firstMediaRow(info: ViewabilityInfo | null | undefined): FeedRow | null {
   const items = info?.viewableItems;
@@ -256,9 +256,9 @@ export function useFeedViewability(options: {
     (info: ViewabilityInfo | null) => {
       const nextKey = topMediaKey(info);
       const prevKey = currentlyVisibleVideoRef.current;
-      // Silence the clip being left immediately. Do not drop its player
-      // while the finger is still moving — creating and releasing ExoPlayer
-      // mid-gesture crashes Android.
+      // Silence the clip being left in this same turn, then start the one
+      // now on screen. Waiting for the fling to settle left the next card
+      // paused until the finger stopped.
       if (
         prevKey &&
         nextKey &&
@@ -266,18 +266,14 @@ export function useFeedViewability(options: {
         useGlobalVideoStore.getState().playingVideos[prevKey]
       ) {
         pauseMediaRef.current(prevKey);
-        if (scrollingRef.current) {
-          pausedForScrollKeyRef.current = prevKey;
-        } else {
-          currentlyVisibleVideoRef.current = null;
-        }
+        pausedForScrollKeyRef.current = scrollingRef.current ? prevKey : null;
+        if (!scrollingRef.current) currentlyVisibleVideoRef.current = null;
       }
-      if (scrollingRef.current) return;
-      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
-      switchTimerRef.current = setTimeout(() => {
+      if (switchTimerRef.current) {
+        clearTimeout(switchTimerRef.current);
         switchTimerRef.current = null;
-        flushViewability();
-      }, PLAY_SWITCH_MS);
+      }
+      flushViewability();
     },
     [currentlyVisibleVideoRef, flushViewability]
   );
@@ -291,7 +287,7 @@ export function useFeedViewability(options: {
       scrollEndTimerRef.current = null;
       scrollingRef.current = false;
       flushViewability();
-    }, 140);
+    }, SCROLL_SETTLE_MS);
   }, [flushViewability]);
 
   const onFeedScrollState = useCallback(

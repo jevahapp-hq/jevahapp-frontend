@@ -1,5 +1,5 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { Text, View } from "react-native";
 import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
 import { InstantPressable } from "../../../src/shared/components/InstantPressable";
@@ -36,7 +36,7 @@ interface ReelsActionButtonsProps {
   triggerHapticFeedback: () => void;
 }
 
-export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
+export const ReelsActionButtons = memo(function ReelsActionButtons({
   videoKey,
   modalKey,
   contentId,
@@ -56,7 +56,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
   getResponsiveFontSize,
   getTouchTargetSize,
   triggerHapticFeedback,
-}) => {
+}: ReelsActionButtonsProps) {
   const likeDisplayCount = useMemo(() => {
     const raw = canUseBackendLikes
       ? activeLikesCount
@@ -101,8 +101,8 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         flexDirection: "column",
         alignItems: "center",
         gap: getResponsiveSpacing(8, 10, 12),
-        zIndex: 40,
-        elevation: 32,
+        zIndex: 60,
+        elevation: 60,
       }}
     >
       <LikeHeartButton
@@ -225,5 +225,5 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
       </InstantPressable>
     </View>
   );
-};
+});
 

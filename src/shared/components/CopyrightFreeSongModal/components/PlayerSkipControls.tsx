@@ -26,7 +26,7 @@ export function PlayerSkipControls({
         paddingTop: 2,
       }}
     >
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onToggleMute}
         activeOpacity={0.7}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -52,7 +52,7 @@ export function PlayerSkipControls({
         />
       </TouchableOpacity>
 
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onOpenPlaylistView}
         style={{
           flexDirection: "row",
@@ -79,7 +79,7 @@ export function PlayerSkipControls({
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         onPress={onShare}
         activeOpacity={0.7}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

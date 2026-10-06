@@ -8,6 +8,7 @@ import type { MediaItem } from "../../../../shared/types";
 import { PERF, perfMark, perfMeasure } from "../../../../shared/utils/perfMarks";
 import { prefetchVideoUrls } from "../../../../shared/utils/videoPrefetch";
 import { getVideoUrlFromMedia } from "../../../../shared/utils/videoUrlManager";
+import { prefetchFeedVideoAspects } from "../../video-feed/prefetchFeedVideoAspects";
 
 /** Warm posters + video heads. Lite: first screen on disk; no extra players. */
 export function useAllContentTikTokWarmup(
@@ -33,6 +34,11 @@ export function useAllContentTikTokWarmup(
       .map((item) => getVideoUrlFromMedia(item))
       .filter(Boolean) as string[];
     if (urls.length) prefetchVideoUrls(urls);
+  }, [filteredMediaList, isFeedActive]);
+
+  useEffect(() => {
+    if (!isFeedActive) return;
+    prefetchFeedVideoAspects(filteredMediaList);
   }, [filteredMediaList, isFeedActive]);
 
   const feedFirstPaintMarkedRef = useRef(false);

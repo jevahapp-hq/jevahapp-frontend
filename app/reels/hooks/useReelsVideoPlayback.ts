@@ -8,6 +8,7 @@ import { audioConfig } from "../../utils/audioConfig";
 import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { getAudibleReel, setAndroidAudibleReel } from "../reelAudible";
+import { getReelDurationMs } from "../reelPlayheadStore";
 
 export interface UseReelsVideoPlaybackParams {
   videoRefs: RefObject<Record<string, VideoPlayer>>;
@@ -67,7 +68,7 @@ export function useReelsVideoPlayback({
         return;
       }
       try {
-        let duration = durationMsOf(player, videoDuration);
+        let duration = getReelDurationMs(videoKey) || durationMsOf(player, videoDuration);
         if (duration > 0) setVideoDuration(duration);
         if (!(duration > 0)) {
           if (__DEV__) {
@@ -149,7 +150,6 @@ export function useReelsVideoPlayback({
 
   useEffect(() => {
     if (!modalKey) return;
-    setVideoPosition(0);
     setVideoDuration(knownDurationRef.current);
     setShowPauseOverlay(false);
     setUserHasManuallyPaused(false);
@@ -157,7 +157,7 @@ export function useReelsVideoPlayback({
     useGlobalVideoStore.setState({ currentlyVisibleVideo: modalKey });
     // The feed blur used to pause every player after this start, so fullscreen
     // sat on the play icon. Start now and once more after that blur.
-    const play = () => {
+      const play = () => {
       if (manualPauseRef.current) return;
       // A swipe may already have handed sound to the page on screen.
       // Replaying this key would start the reel that just left.
@@ -165,7 +165,9 @@ export function useReelsVideoPlayback({
       if (audible && audible !== modalKey) return;
       setAndroidAudibleReel(modalKey);
       try {
-        globalVideoStore.playVideoGlobally(modalKey);
+        // State only. The mounted player starts itself. playVideoGlobally
+        // also paused every feed player still registered on the way in.
+        useGlobalVideoStore.getState().playVideo(modalKey);
       } catch (e) {
         console.error("Error playing video:", e);
       }
@@ -178,7 +180,7 @@ export function useReelsVideoPlayback({
       cancelAnimationFrame(frame);
       clearTimeout(later);
     };
-  }, [modalKey, globalVideoStore, setMenuVisible, setShowPauseOverlay, setUserHasManuallyPaused, setVideoDuration, setVideoPosition]);
+  }, [modalKey, globalVideoStore, setMenuVisible, setShowPauseOverlay, setUserHasManuallyPaused, setVideoDuration]);
 
   return {
     seekToPosition,

@@ -15,6 +15,7 @@ export function SongListItem({
 
   return (
     <TouchableOpacity
+      delayPressIn={0}
       onPress={() => {
         // Tap should open Now Playing view like the reference screenshot
         // and start playback with the current queue.
@@ -78,6 +79,7 @@ export function SongListItem({
         </Text>
         <TouchableOpacity
           disabled={!item.artistSlug}
+          delayPressIn={0}
           onPress={(e) => {
             e.stopPropagation();
             onOpenArtistProfile?.(item.artistSlug);
@@ -101,6 +103,7 @@ export function SongListItem({
 
       {/* 3-dot menu */}
       <TouchableOpacity
+        delayPressIn={0}
         onPress={(e) => {
           e.stopPropagation();
           onOpenOptions?.(item);

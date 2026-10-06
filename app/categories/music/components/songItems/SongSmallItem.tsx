@@ -13,6 +13,7 @@ export function SongSmallItem({
 
   return (
     <TouchableOpacity
+      delayPressIn={0}
       onPress={() => {
         onOpenPlayer(item);
         // Start playing immediately (fire and forget - don't await to avoid blocking UI)

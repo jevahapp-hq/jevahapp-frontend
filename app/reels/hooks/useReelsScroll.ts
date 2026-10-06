@@ -1,10 +1,17 @@
+import type { VideoPlayer } from "expo-video";
 import { useCallback, useRef, type MutableRefObject } from "react";
 import { ViewToken } from "react-native";
-import type { VideoPlayer } from "expo-video";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
-import { isLiveVideoPlayer } from "../../../src/features/media/video-feed/safeVideoPlayer";
-import { setAndroidAudibleReel } from "../reelAudible";
+import {
+  reelManuallyPaused,
+  setAndroidAudibleReel,
+  setReelManualPause,
+} from "../reelAudible";
+import {
+  enqueueReelPlayerJob,
+  silenceReelPlayersExcept,
+} from "../reelPlayerQueue";
 import { reelVideoKey } from "../reelScrollIndex";
 
 export interface UseReelsScrollOptions {
@@ -33,62 +40,23 @@ export function useReelsScroll({
   currentIndex,
   setCurrentIndex,
   allVideos,
-  getSpeakerName,
   userHasManuallyPaused,
-  globalVideoStore,
   pendingStartIndexRef,
-  videoRefs,
   clearManualPause,
+  videoRefs,
 }: UseReelsScrollOptions) {
   const currentIndexRef = useRef(currentIndex);
   currentIndexRef.current = currentIndex;
   const allVideosRef = useRef(allVideos);
   allVideosRef.current = allVideos;
-  const getSpeakerNameRef = useRef(getSpeakerName);
-  getSpeakerNameRef.current = getSpeakerName;
   const userHasManuallyPausedRef = useRef(userHasManuallyPaused);
   userHasManuallyPausedRef.current = userHasManuallyPaused;
-  const globalVideoStoreRef = useRef(globalVideoStore);
-  globalVideoStoreRef.current = globalVideoStore;
   const setCurrentIndexRef = useRef(setCurrentIndex);
   setCurrentIndexRef.current = setCurrentIndex;
-    const videoRefsRef = useRef(videoRefs);
-    videoRefsRef.current = videoRefs;
-    const clearManualPauseRef = useRef(clearManualPause);
-    clearManualPauseRef.current = clearManualPause;
-  const silenceExcept = useCallback((keep: string | null, pause: boolean) => {
-    const players = videoRefsRef.current?.current;
-    if (!players) return;
-    for (const key of Object.keys(players)) {
-      const player = players[key];
-      if (!isLiveVideoPlayer(player) || key === keep) continue;
-      try {
-        player.muted = true;
-        player.volume = 0;
-        // ExoPlayer keeps the audio track when only `muted` flips.
-        // Pause whenever this reel is no longer the one on screen.
-        if (pause) player.pause();
-      } catch {
-        // Released native player.
-      }
-    }
-  }, []);
-
-  const hearReel = useCallback((keep: string) => {
-    const player = videoRefsRef.current?.current?.[keep];
-    if (!isLiveVideoPlayer(player)) return;
-    const muted = useGlobalVideoStore.getState().mutedVideos[keep] ?? false;
-    const volume = muted ? 0 : 1;
-    try {
-      if (player.muted !== muted) player.muted = muted;
-      if (Math.abs((Number(player.volume) || 0) - volume) > 0.02) {
-        player.volume = volume;
-      }
-      if (!player.playing) player.play();
-    } catch {
-      // Released native player.
-    }
-  }, []);
+  const clearManualPauseRef = useRef(clearManualPause);
+  clearManualPauseRef.current = clearManualPause;
+  const videoRefsRef = useRef(videoRefs);
+  videoRefsRef.current = videoRefs;
 
   const scrollIndexRef = useRef(currentIndex);
   const activateIndexRef = useRef<(index: number) => void>(() => {});
@@ -110,42 +78,51 @@ export function useReelsScroll({
     const videoKey = reelVideoKey(videoData, newIndex);
     const alreadyHere = newIndex === currentIndexRef.current;
     const alreadyPlaying =
-      useGlobalVideoStore.getState().currentlyPlayingVideo === videoKey;
+      useGlobalVideoStore.getState().playingVideos[videoKey] === true;
+
+    // Stop every clip except the one on screen. Pausing only the previous
+    // index left a reel you scrolled past still playing over this one.
+    if (!alreadyHere) {
+      const refs = videoRefsRef.current?.current;
+      silenceReelPlayersExcept(videoKey, refs);
+      if (refs?.[videoKey] && !reelManuallyPaused(videoKey)) {
+        const arriving = refs[videoKey];
+        const muted =
+          useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
+        enqueueReelPlayerJob(videoKey, "hear", () => {
+          try {
+            silenceReelPlayersExcept(videoKey, videoRefsRef.current?.current);
+            arriving.pause();
+            arriving.muted = muted;
+            arriving.volume = muted ? 0 : 1;
+            arriving.play();
+          } catch {
+            // Released native player.
+          }
+        });
+      }
+    }
+
+    if (!alreadyHere) setReelManualPause(null);
+    setAndroidAudibleReel(videoKey);
+    if (!(alreadyHere && alreadyPlaying) && !reelManuallyPaused(videoKey)) {
+      // State only, in this turn, so the pause icon and the player agree
+      // before the list re-renders. Native play stays on the player effect.
+      useGlobalVideoStore.getState().playVideo(videoKey);
+    }
 
     if (!alreadyHere) {
       currentIndexRef.current = newIndex;
-      setCurrentIndexRef.current(newIndex);
-      useReelsStore.getState().setCurrentIndex(newIndex);
       userHasManuallyPausedRef.current = false;
       clearManualPauseRef.current?.();
     }
 
-    // Stop every other clip in this same turn, including when this page
-    // was already the visible one. Waiting for the next render lets the
-    // previous reel keep talking.
-    setAndroidAudibleReel(videoKey);
-    silenceExcept(videoKey, true);
-
-    if (userHasManuallyPausedRef.current && alreadyHere) {
-      try {
-        globalVideoStoreRef.current.pauseAllVideos?.();
-      } catch {
-        // Released player.
-      }
-      scrollIndexRef.current = newIndex;
-      return;
-    }
-
     scrollIndexRef.current = newIndex;
     if (!(alreadyHere && alreadyPlaying)) {
-      try {
-        globalVideoStoreRef.current.playVideoGlobally(videoKey);
-      } catch (e) {
-        console.warn("❌ useReelsScroll: Failed to trigger playback updates:", e);
-      }
+      setCurrentIndexRef.current(newIndex);
+      useReelsStore.getState().setCurrentIndex(newIndex);
     }
-    hearReel(videoKey);
-  }, [hearReel, silenceExcept]);
+  }, []);
 
   activateIndexRef.current = activateIndex;
 
@@ -161,25 +138,20 @@ export function useReelsScroll({
         (token) => token.isViewable && typeof token.index === "number"
       );
       if (candidates.length === 0) return;
-      if (candidates.length === 1) {
-        activateIndexRef.current(candidates[0].index ?? 0);
-        return;
-      }
       const target = scrollIndexRef.current;
-      let best = candidates[0];
-      for (const token of candidates) {
-        const index = token.index ?? 0;
-        const bestIndex = best.index ?? 0;
-        if (Math.abs(index - target) < Math.abs(bestIndex - target)) best = token;
-      }
-      activateIndexRef.current(best.index ?? 0);
+      const onTarget = candidates.some((token) => token.index === target);
+      // A callback that does not include the page the scroll already chose
+      // belongs to the reel you left. Applying it restarted that reel and
+      // hid the buttons on the one you landed on.
+      if (!onTarget) return;
+      activateIndexRef.current(target);
     }
   ).current;
 
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: {
-        viewAreaCoveragePercentThreshold: 60,
+        viewAreaCoveragePercentThreshold: 8,
         minimumViewTime: 0,
       },
       onViewableItemsChanged,

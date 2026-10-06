@@ -24,6 +24,7 @@ export function DisplayModeToggle({
       {(["list", "grid", "small", "large"] as DisplayMode[]).map((mode) => (
         <TouchableOpacity
           key={mode}
+          delayPressIn={0}
           onPress={() => onChange(mode)}
           style={{
             width: 32,

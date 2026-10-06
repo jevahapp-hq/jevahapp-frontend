@@ -50,9 +50,13 @@ export function supportsFullScreenPlayer(source?: Source): boolean {
 }
 
 /**
- * Music (feed / catalog / library) owns the full-screen player. The floating
- * mini bar must not sit over the bottom tabs for those tracks.
+ * Catalog music and feed audio sermons play on their own page.
+ * The floating card stays for hymns and ebook read-aloud only.
  */
 export function shouldHideMiniPlayerForTrack(source?: Source): boolean {
-  return supportsFullScreenPlayer(source);
+  return (
+    source === "copyright-free" ||
+    source === "library" ||
+    source === "feed"
+  );
 }

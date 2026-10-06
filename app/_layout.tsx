@@ -1,5 +1,4 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -34,30 +33,16 @@ import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { appMmkv } from "../src/shared/cache/mmkvStorage";
 import "./utils/headerProfileCache";
-import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
-import {
-  startBootCacheHydration,
-  whenBootCacheReady,
-} from "../src/shared/cache/bootCache";
-import {
-  hydratePersistedQueryCache,
-  registerPersistedQueryClient,
-  subscribePersistedQueryCache,
-  swrPersistedQueryCache,
-} from "../src/shared/cache/persistQueryClient";
-import { registerDefaultContentQueryDefaults } from "../src/shared/media/useDefaultContentQuery";
+import { swrPersistedQueryCache } from "../src/shared/cache/persistQueryClient";
 import {
   allContentQueryKey,
   getFeedPageSize,
   getFeedStaleMs,
   getFeedMaxPages,
 } from "../src/shared/config/feedCachePolicy";
-import {
-  hydrateLiteProfile,
-  hydrateLiteProfileSync,
-} from "../src/shared/lite/liteProfile";
+import { hydrateLiteProfile } from "../src/shared/lite/liteProfile";
 import { hasBackendSessionSync } from "./utils/sessionAuth";
-import { runFullscreenBackExit } from "../src/features/media/video-feed/fullscreenBackSession";
+import { scheduleAppBoot, whenBootCacheReady } from "../src/shared/boot/scheduleAppBoot";
 import { PERF, getAllPerfSummaries, perfMark } from "../src/shared/utils/perfMarks";
 import { hideAppSplash } from "../src/shared/utils/appSplash";
 import { warmupBackend } from "./utils/apiWarmup";
@@ -140,20 +125,7 @@ const queryClient = new QueryClient({
     },
   },
 });
-registerDefaultContentQueryDefaults(queryClient);
-
-// Sync Lite mode + MMKV → React Query before first Home paint
-try {
-  hydrateLiteProfileSync();
-  hydrateFeedQueryCache(queryClient);
-  hydratePersistedQueryCache(queryClient);
-} catch {
-  // ignore corrupt cache
-}
-
-registerPersistedQueryClient(queryClient);
-subscribePersistedQueryCache(queryClient);
-void startBootCacheHydration(queryClient);
+scheduleAppBoot(queryClient);
 
 export default function RootLayout() {
   useArtistDeepLinks();
@@ -169,9 +141,6 @@ export default function RootLayout() {
     "PlusJakartaSans-SemiBold": PlusJakartaSans_600SemiBold,
     "PlusJakartaSans-Bold": PlusJakartaSans_700Bold,
     "PlusJakartaSans-ExtraBold": PlusJakartaSans_800ExtraBold,
-    ...Ionicons.font,
-    ...MaterialIcons.font,
-    ...Feather.font,
   });
 
   useEffect(() => {
@@ -332,9 +301,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
+    let exitFullscreen: (() => boolean) | null = null;
+    let cancelled = false;
+    void import("../src/features/media/video-feed/fullscreenBackSession").then(
+      (mod) => {
+        if (!cancelled) exitFullscreen = mod.runFullscreenBackExit;
+      }
+    );
     const handler = () => {
       try {
-        if (runFullscreenBackExit()) return true;
+        if (exitFullscreen?.()) return true;
       } catch {
         return true;
       }
@@ -343,7 +319,10 @@ export default function RootLayout() {
       return true;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", handler);
-    return () => sub.remove();
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
   }, []);
 
   if (!publishableKey) {
@@ -396,7 +375,7 @@ export default function RootLayout() {
                         screenOptions={{
                           headerShown: false,
                           gestureEnabled: true,
-                          fullScreenGestureEnabled: true,
+                          fullScreenGestureEnabled: false,
                           animation: "slide_from_right",
                           contentStyle: { backgroundColor: "#FCFCFD" },
                         }}

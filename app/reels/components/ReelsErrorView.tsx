@@ -24,7 +24,8 @@ export function ReelsErrorView({ errorMessage, onRetry, onGoBack }: ReelsErrorVi
         {errorMessage}
       </Text>
       <TouchableOpacity
-        onPress={onRetry}
+        delayPressIn={0}
+        onPressIn={onRetry}
         style={{
           backgroundColor: "#FEA74E",
           paddingHorizontal: 20,
@@ -35,7 +36,8 @@ export function ReelsErrorView({ errorMessage, onRetry, onGoBack }: ReelsErrorVi
         <Text style={{ color: "#fff", fontSize: 16 }}>Try Again</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        onPress={onGoBack}
+        delayPressIn={0}
+        onPressIn={onGoBack}
         style={{
           backgroundColor: "transparent",
           paddingHorizontal: 20,

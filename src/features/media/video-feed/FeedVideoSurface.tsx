@@ -23,6 +23,11 @@ interface FeedVideoSurfaceProps {
    * so the reel plays audio on a black page.
    */
   useExoShutter?: boolean;
+  /**
+   * No black behind the picture. Android keeps the surface invisible until
+   * its first frame, so whatever sits underneath (the poster) shows until then.
+   */
+  transparent?: boolean;
 }
 
 /**
@@ -41,6 +46,7 @@ export function FeedVideoSurface({
   contentFit = "cover",
   inline = false,
   useExoShutter = false,
+  transparent = false,
 }: FeedVideoSurfaceProps) {
   return (
     <View
@@ -49,13 +55,18 @@ export function FeedVideoSurface({
         { height },
         width != null ? { width } : null,
         contentFit === "contain" ? styles.containHost : null,
+        transparent ? styles.clear : null,
       ]}
       collapsable={false}
       pointerEvents="none"
     >
       <VideoView
         player={player}
-        style={[styles.video, inline ? { width: width ?? "100%", height } : null]}
+        style={[
+          styles.video,
+          inline ? { width: width ?? "100%", height } : null,
+          transparent ? styles.clear : null,
+        ]}
         contentFit={contentFit}
         nativeControls={false}
         fullscreenOptions={{ enable: false }}
@@ -87,5 +98,8 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#000",
+  },
+  clear: {
+    backgroundColor: "transparent",
   },
 });
