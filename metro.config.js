@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+require("./scripts/preload-fs-retry");
 const { withNativeWind } = require("nativewind/metro");
 const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
@@ -165,7 +166,8 @@ module.exports = (() => {
   // NativeWind wraps resolveRequest — apply aliases AFTER so they actually run.
   const config = withNativeWind(base, { input: "./global.css" });
   const innerResolve = config.resolver.resolveRequest;
-  config.maxWorkers = 4;
+  // Cap workers on Windows so OneDrive + Metro does not exhaust file handles.
+  config.maxWorkers = process.platform === "win32" ? 2 : 4;
 
   config.resolver.resolveRequest = (context, moduleName, platform) => {
     const kind = matchExpoRouterCtx(context, moduleName);

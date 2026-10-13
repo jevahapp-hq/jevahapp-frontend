@@ -10,7 +10,7 @@ import {
   readableChapterAtOrAfter,
   splitPageIntoBlocks,
   upsertChapter,
-} from "../../app/reader/pdfText/buildEbookChapters";
+} from "../../app/reader/pdfText/_buildEbookChapters";
 
 test("page 1 becomes chapter 1 with paragraph blocks", () => {
   const chapter = buildChapterFromPage(
@@ -61,7 +61,7 @@ test("upsert fills missing pages so chapter N is always at index N-1", () => {
 });
 
 test("extractor html posts each PDF page as a numbered chapter source", () => {
-  const { getPdfJsExtractorHtml } = require("../../app/reader/pdfText/pdfJsExtractorHtml") as {
+  const { getPdfJsExtractorHtml } = require("../../app/reader/pdfText/_pdfJsExtractorHtml") as {
     getPdfJsExtractorHtml: () => string;
   };
   const html = getPdfJsExtractorHtml();

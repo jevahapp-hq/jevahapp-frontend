@@ -87,7 +87,7 @@ export default function AnimatedLogoIntro({
       backgroundColor: interpolateColor(
         bgProgress.value,
         [0, 1],
-        ['rgba(0,0,0,0)', backgroundColor]
+        [backgroundColor, backgroundColor]
       ),
       transform: [{ scale }],
     };

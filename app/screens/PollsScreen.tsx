@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { usePolls, isPollOwner } from "../hooks/usePolls";
 import { Poll as PollType } from "../utils/communityAPI";
 import { formatTimestamp } from "../utils/communityHelpers";

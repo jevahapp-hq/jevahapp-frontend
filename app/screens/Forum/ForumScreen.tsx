@@ -6,6 +6,7 @@ import {
   StatusBar,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
 import { ListRowSkeleton } from "../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import { useForums, useForumPosts } from "../../hooks/useForums";

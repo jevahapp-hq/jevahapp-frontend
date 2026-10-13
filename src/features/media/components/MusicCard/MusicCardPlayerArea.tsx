@@ -127,7 +127,7 @@ export function MusicCardPlayerArea(props: {
             pointerEvents="none"
           >
             <Text
-              className="text-white font-semibold text-sm"
+              className="text-white font-jakarta-semibold text-sm"
               numberOfLines={2}
               style={{
                 textShadowColor: "rgba(0, 0, 0, 0.8)",

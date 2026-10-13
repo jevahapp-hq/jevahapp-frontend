@@ -9,5 +9,5 @@ export default function HomeLayout() {
     return <Redirect href="/home/home" />;
   }
 
-  return <Stack />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

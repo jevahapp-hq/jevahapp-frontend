@@ -28,6 +28,7 @@ import {
   releaseMiniPlayer,
   suppressMiniPlayer,
 } from "../../../src/shared/audio/miniPlayerGate";
+import { getSystemNavClearance } from "../../../src/shared/layout/bottomChromeLayout";
 import { isLiteProfileActive } from "../../../src/shared/lite/liteProfile";
 import { triggerHapticFeedback } from "../../../src/shared/utils/haptics";
 import {
@@ -121,7 +122,7 @@ function Orb({
   );
 }
 
-function fabLayout(_insetsBottom: number) {
+function fabLayout(insetsBottom: number) {
   const { width, height } = Dimensions.get("window");
   const navBarHeight = getBottomNavHeight();
   const fab = getFabSize();
@@ -130,7 +131,7 @@ function fabLayout(_insetsBottom: number) {
   const outer = fab.size + pad * 2;
   const hole = outer + 18;
   const left = (width - hole) / 2;
-  const bottom = navBarHeight - lift - 9;
+  const bottom = navBarHeight - lift - 9 + getSystemNavClearance(insetsBottom);
   const top = height - bottom - hole;
   return { left, top, hole, bottom, width, height };
 }

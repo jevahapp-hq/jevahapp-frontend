@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Platform } from "react-native";
 import { resolveMediaAudioUrl } from "../../../../shared/audio/mapToAudioTrack";
 import type { MediaItem } from "../../../../shared/types";
 import {
@@ -11,10 +10,8 @@ import {
     getVideoUrlFromMedia,
 } from "../../../../shared/utils/videoUrlManager";
 import {
-    FEED_INITIAL_MOUNT_COUNT,
-    FEED_PRELOAD_NEIGHBOR_DISTANCE,
-    FEED_PRELOAD_WARM_DISTANCE,
-    FEED_WARM_IDLE_MOUNT_COUNT,
+  FEED_WARM_IDLE_MOUNT_COUNT,
+  getFeedPlayerBudget,
 } from "../../video-feed";
 import {
     areFeedDecodersSuspended,
@@ -86,7 +83,7 @@ export function useFeedPlayerMounts(options: {
       keyBySeq: Record<number, string>
     ) => {
       const itemBySeq = mediaItemBySeqRef.current;
-      const distance = FEED_PRELOAD_NEIGHBOR_DISTANCE;
+      const distance = getFeedPlayerBudget().neighborDistance;
       let behind = 0;
       for (let seq = activeSeq - 1; seq >= 0 && behind < distance; seq--) {
         const item = itemBySeq[seq];
@@ -129,7 +126,7 @@ export function useFeedPlayerMounts(options: {
           const k = keyBySeq[i];
           if (k) hot.add(k);
         }
-        warmSeqRange(0, FEED_PRELOAD_WARM_DISTANCE);
+        warmSeqRange(0, getFeedPlayerBudget().warmDistance);
       } else {
         setMountedVideoKeys((prev) => (prev.size === 0 ? prev : new Set()));
         return;
@@ -140,23 +137,10 @@ export function useFeedPlayerMounts(options: {
     ) {
       const activeSeq = seqByKey[currentlyVisibleVideo];
       hot.add(currentlyVisibleVideo);
-      // iPhone keeps the previous clip paused and the next ones primed.
-      // Android primes only the next clip (paused on its first frame) so the
-      // swipe lands on video, not a thumbnail. The clip you just left stays
-      // through maxPlayers. More decoders than that and Expo Go closes.
-      if (Platform.OS !== "android") {
-        addVideoNeighbors(hot, activeSeq, keyBySeq);
-      } else {
-        for (let seq = activeSeq + 1; ; seq++) {
-          const item = mediaItemBySeqRef.current[seq];
-          if (!item) break;
-          if (!isFeedVideo(item)) continue;
-          const key = keyBySeq[seq];
-          if (key) hot.add(key);
-          break;
-        }
-      }
-      warmSeqRange(activeSeq, FEED_PRELOAD_WARM_DISTANCE);
+      // Neighbors stay posters on Android (one decoder). Other platforms
+      // keep the previous card paused and the next one primed.
+      addVideoNeighbors(hot, activeSeq, keyBySeq);
+      warmSeqRange(activeSeq, getFeedPlayerBudget().warmDistance);
       const upcoming: string[] = [];
       for (let seq = activeSeq + 1; upcoming.length < 3; seq++) {
         const item = mediaItemBySeqRef.current[seq];
@@ -167,10 +151,9 @@ export function useFeedPlayerMounts(options: {
       }
       prefetchFirstFrames(upcoming, { priority: true });
     } else if (!hasDeterminedVisibilityRef.current) {
+      const initialMount = getFeedPlayerBudget().initialMount;
       let mounted = 0;
-      const initialCount =
-        Platform.OS === "android" ? 2 : FEED_INITIAL_MOUNT_COUNT;
-      for (let i = 0; mounted < initialCount; i++) {
+      for (let i = 0; mounted < initialMount; i++) {
         const item = mediaItemBySeqRef.current[i];
         if (!item) break;
         if (!isFeedVideo(item)) continue;
@@ -180,7 +163,7 @@ export function useFeedPlayerMounts(options: {
           mounted++;
         }
       }
-      warmSeqRange(0, FEED_PRELOAD_WARM_DISTANCE);
+      warmSeqRange(0, getFeedPlayerBudget().warmDistance);
     }
 
     if (hot.size === 0) return;

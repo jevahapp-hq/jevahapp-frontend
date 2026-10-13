@@ -6,6 +6,8 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getSystemNavClearance } from "../../src/shared/layout/bottomChromeLayout";
 import { playNavTapSound } from "../../src/shared/utils/uiSounds";
 import { pausePlaybackSession } from "../../src/shared/audio/playOrToggleTrack";
 import {
@@ -56,6 +58,8 @@ export default function BottomNav({
   setSelectedTab,
 }: BottomNavProps) {
   const navBarHeight = getBottomNavHeight();
+  const insets = useSafeAreaInsets();
+  const systemNav = getSystemNavClearance(insets.bottom);
   const lastHomeVideoKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -135,7 +139,6 @@ export default function BottomNav({
     [selectedTab, setSelectedTab]
   );
 
-  const tabPadH = getResponsiveSpacing(4, 6, 8, 10);
   const tabPadV = getResponsiveSpacing(6, 8, 10, 12);
   const fabSlotWidth =
     getFabSize().size +
@@ -156,7 +159,7 @@ export default function BottomNav({
             flex: 1,
             alignItems: "center",
             justifyContent: "center",
-            paddingHorizontal: tabPadH,
+            paddingHorizontal: 0,
             paddingVertical: tabPadV,
             minHeight: 48,
             opacity: pressed ? 0.85 : 1,
@@ -165,7 +168,7 @@ export default function BottomNav({
           <View style={{ alignItems: "center", justifyContent: "center" }}>
             <Ionicons
               name={isActive ? filled : outline}
-              size={getIconSize("large")}
+              size={getIconSize("medium")}
               color={color}
             />
           </View>
@@ -173,18 +176,22 @@ export default function BottomNav({
             style={{
               alignItems: "center",
               justifyContent: "center",
-              marginTop: getResponsiveSpacing(2, 3, 4, 5),
+              alignSelf: "stretch",
+              marginTop: 2,
             }}
           >
             <Text
               style={{
                 fontFamily: JAKARTA.bold,
-                fontSize: 13,
-                lineHeight: 16,
+                fontSize: 11,
+                lineHeight: 14,
                 color,
                 textAlign: "center",
+                width: "100%",
               }}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {label}
             </Text>
@@ -195,10 +202,24 @@ export default function BottomNav({
   };
 
   return (
+    <>
+    {systemNav > 0 ? (
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: systemNav,
+          backgroundColor: "white",
+        }}
+      />
+    ) : null}
     <View
       style={{
         position: "absolute",
-        bottom: 0,
+        bottom: systemNav,
         left: 0,
         right: 0,
         height: navBarHeight,
@@ -218,5 +239,6 @@ export default function BottomNav({
       <View style={{ width: fabSlotWidth }} />
       {TAB_ORDER.slice(2).map(renderTab)}
     </View>
+    </>
   );
 }

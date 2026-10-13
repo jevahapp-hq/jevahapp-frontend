@@ -277,7 +277,7 @@ function VideoCardPlayerInner(
   } = useInstantFeedVideoPlayer({
     source: videoUrl,
     loop: true,
-    timeUpdateEventInterval: 0.25,
+    timeUpdateEventInterval: 1,
     idle: !props.isActive,
   });
 

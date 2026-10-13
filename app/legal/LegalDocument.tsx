@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import AuthHeader from "../components/AuthHeader";
+import { Fonts } from "../../src/shared/theme/fonts";
 
 export function LegalScreen({
   title,
@@ -21,8 +22,16 @@ export function LegalScreen({
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        <Text className="text-sm text-gray-500 mb-2">Last updated: {updated}</Text>
-        <Text className="text-xs text-gray-400 mb-6">
+        <Text
+          className="text-sm text-gray-500 mb-2"
+          style={{ fontFamily: Fonts.regular }}
+        >
+          Last updated: {updated}
+        </Text>
+        <Text
+          className="text-xs text-gray-400 mb-6"
+          style={{ fontFamily: Fonts.regular }}
+        >
           Please read this document carefully. It forms part of your agreement
           with Jevah.
         </Text>
@@ -34,7 +43,10 @@ export function LegalScreen({
 
 export function H({ children }: { children: ReactNode }) {
   return (
-    <Text className="font-bold text-[#090E24] text-[15px] mb-2 mt-1">
+    <Text
+      className="text-[#090E24] text-[15px] mb-2 mt-1"
+      style={{ fontFamily: Fonts.bold }}
+    >
       {children}
     </Text>
   );
@@ -42,7 +54,10 @@ export function H({ children }: { children: ReactNode }) {
 
 export function P({ children }: { children: ReactNode }) {
   return (
-    <Text className="text-[#344054] text-[14px] leading-5 mb-4">
+    <Text
+      className="text-[#344054] text-[14px] leading-5 mb-4"
+      style={{ fontFamily: Fonts.regular }}
+    >
       {children}
     </Text>
   );
@@ -55,6 +70,7 @@ export function Ul({ items }: { items: string[] }) {
         <Text
           key={item}
           className="text-[#344054] text-[14px] leading-5 mb-1.5"
+          style={{ fontFamily: Fonts.regular }}
         >
           • {item}
         </Text>

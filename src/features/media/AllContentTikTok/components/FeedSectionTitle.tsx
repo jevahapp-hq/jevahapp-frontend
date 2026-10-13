@@ -4,6 +4,7 @@
  */
 import React from "react";
 import { Text, View } from "react-native";
+import { Fonts } from "../../../../shared/theme/fonts";
 
 export function FeedSectionTitle({ title }: { title: string }) {
   return (
@@ -11,8 +12,7 @@ export function FeedSectionTitle({ title }: { title: string }) {
       <Text
         style={{
           fontSize: 16,
-          fontFamily: "PlusJakartaSans_600SemiBold",
-          fontWeight: "600",
+          fontFamily: Fonts.semibold,
           color: "#344054",
           paddingHorizontal: 16,
         }}

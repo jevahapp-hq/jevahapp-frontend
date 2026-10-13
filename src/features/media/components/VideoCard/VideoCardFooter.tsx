@@ -87,12 +87,12 @@ export function VideoCardFooter({
         </View>
         <View style={styles.meta} pointerEvents="box-none">
           <View style={styles.nameRow}>
-            <Text className="text-sm font-semibold text-gray-800">
+            <Text className="text-sm font-jakarta-semibold text-gray-800">
               {getUserDisplayNameFromContent(video)}
             </Text>
             <View className="flex flex-row mt-1 ml-2">
               <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-              <Text className="text-xs text-gray-500 ml-1">
+              <Text className="text-xs text-gray-500 ml-1 font-jakarta">
                 {getTimeAgo(video.createdAt)}
               </Text>
             </View>

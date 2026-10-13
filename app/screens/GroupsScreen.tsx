@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import CreateGroupModal from "../components/CreateGroupModal";
 import DeleteGroupModal from "../components/DeleteGroupModal";
 import FlagGroupModal from "../components/FlagGroupModal";

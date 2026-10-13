@@ -46,7 +46,7 @@ import {
 import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 import { AllContentTikTokList } from "./components/AllContentTikTokList";
-import { FEED_HARD_MAX_PLAYERS, findMediaRowIndex, getFeedVideoRowSize } from "../video-feed";
+import { findMediaRowIndex, getFeedPlayerBudget, getFeedVideoRowSize } from "../video-feed";
 import {
   useAdjacentCommentsPrefetch,
   useAdjacentVideoPrefetch,
@@ -126,9 +126,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, [syncOwnVideoEmails]);
   const liteActive = isLiteProfileActive();
   const listWindow = getLiteListWindow();
-  // Android: the card on screen, the next one primed, and the one you just
-  // left paused on its frame.
-  const maxPlayers = Platform.OS === "android" ? 3 : FEED_HARD_MAX_PLAYERS;
+  const maxPlayers = getFeedPlayerBudget().maxPlayers;
   const queryType = feedQueryContentType(activeTab);
   const tabKind = String(activeTab).toLowerCase();
   const isEbookTab =
@@ -708,13 +706,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     return <ErrorState message={error} />;
   }
 
-  // Returning from fullscreen must not swap a live feed for the skeleton
-  // (black → loading → white). Keep the host empty until cached rows exist.
-  if (filteredMediaList.length === 0 && resumingFromFullscreen) {
-    return <View style={{ flex: 1 }} />;
-  }
-
-  if (isFeedActive && filteredMediaList.length === 0 && tabLoading) {
+  if (isFeedActive && filteredMediaList.length === 0 && (tabLoading || resumingFromFullscreen)) {
     return <LoadingState />;
   }
 

@@ -189,6 +189,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginLeft: 4,
+    fontFamily: "PlusJakartaSans-Regular",
   },
   actionsLine: {
     flexDirection: "row",

@@ -13,7 +13,7 @@ export function LoadingState() {
 export function ErrorState({ message }: { message: string }) {
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: UI_CONFIG.SPACING.LG }}>
-      <Text style={{ color: UI_CONFIG.COLORS.ERROR, textAlign: "center", fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD }}>
+      <Text style={{ color: UI_CONFIG.COLORS.ERROR, textAlign: "center", fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD, fontFamily: "PlusJakartaSans-Regular" }}>
         {message}
       </Text>
     </View>
@@ -27,7 +27,7 @@ export function EmptyState({ contentType }: { contentType: string }) {
       : `No ${contentType.toLowerCase()} content available yet.`;
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: UI_CONFIG.SPACING.LG }}>
-      <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY, textAlign: "center", fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD }}>
+      <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY, textAlign: "center", fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD, fontFamily: "PlusJakartaSans-Regular" }}>
         {message}
       </Text>
     </View>
@@ -42,7 +42,7 @@ export function ContentUnavailableState() {
         color: UI_CONFIG.COLORS.TEXT_PRIMARY,
         textAlign: "center",
         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-        fontWeight: "bold",
+        fontFamily: "PlusJakartaSans-Bold",
         marginTop: 16
       }}>
         Content Unavailable
@@ -51,6 +51,7 @@ export function ContentUnavailableState() {
         color: UI_CONFIG.COLORS.TEXT_SECONDARY,
         textAlign: "center",
         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+        fontFamily: "PlusJakartaSans-Regular",
         marginTop: 8
       }}>
         This content may be under review or has been removed.

@@ -9,13 +9,14 @@
 
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
 import React from 'react';
 import { StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Fonts } from '../../src/shared/theme/fonts';
+import { safeGoBack } from '../../src/shared/navigation/safeGoBack';
 
 interface AuthHeaderProps {
-  title: string;
+  title?: string;
   showCancel?: boolean;
   showBack?: boolean;
   onBackPress?: () => void;
@@ -35,7 +36,7 @@ export default function AuthHeader({
     if (onBackPress) {
       onBackPress();
     } else {
-      router.back();
+      safeGoBack();
     }
   };
 
@@ -43,7 +44,7 @@ export default function AuthHeader({
     if (onCancelPress) {
       onCancelPress();
     } else {
-      router.back();
+      safeGoBack();
     }
   };
 
@@ -78,9 +79,14 @@ export default function AuthHeader({
 
           {/* Center - Title */}
           <View className="flex-1 items-center">
-            <Text className="text-[17px] font-jakarta-bold text-[#3B3B3B] text-center">
-              {title}
-            </Text>
+            {title ? (
+              <Text
+                className="text-[17px] text-[#3B3B3B] text-center"
+                style={{ fontFamily: Fonts.bold }}
+              >
+                {title}
+              </Text>
+            ) : null}
           </View>
 
           {/* Right Side - Cancel Button or Custom Component */}

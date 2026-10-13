@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import allMediaAPI from "../utils/allMediaAPI";
 
 interface Comment {

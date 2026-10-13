@@ -12,6 +12,7 @@ const { spawn } = require("child_process");
 
 require("./patch-logbox-stack");
 require("./patch-css-interop-safe-area");
+require("./preload-fs-retry");
 
 function applyEnvFile(envPath, { override } = { override: false }) {
   if (!fs.existsSync(envPath)) return;
@@ -141,6 +142,15 @@ function resolveLanHostname() {
 
 loadEnvFile();
 
+// Must be on the Expo/Metro process, not only metro.config.js (that file
+// loads after the CLI has already opened thousands of handles).
+const gracefulPreload = "--require ./scripts/preload-graceful-fs.js";
+if (!String(process.env.NODE_OPTIONS || "").includes("preload-graceful-fs")) {
+  process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, gracefulPreload]
+    .filter(Boolean)
+    .join(" ");
+}
+
 const hostname = resolveLanHostname();
 if (!hostname) {
   console.warn(
@@ -178,9 +188,12 @@ process.env.BROWSER = "none";
 process.env.RCT_METRO_PORT = "8081";
 // Android dev keeps route screens out of the first download. Forcing a
 // single bundle inlines every screen (~23MB) and the phone sits on refresh.
-if (!process.env.NODE_OPTIONS) {
-  process.env.NODE_OPTIONS = "--max-old-space-size=8192";
-}
+const preload = path.join(__dirname, "preload-fs-retry.js").replace(/\\/g, "/");
+const preloadFlag = `-r ${preload}`;
+const baseNodeOptions = process.env.NODE_OPTIONS || "--max-old-space-size=8192";
+process.env.NODE_OPTIONS = baseNodeOptions.includes("preload-fs-retry")
+  ? baseNodeOptions
+  : `${baseNodeOptions} ${preloadFlag}`.trim();
 
 const child = spawn("npx", expoArgs, {
   stdio: "inherit",

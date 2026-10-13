@@ -155,17 +155,26 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      // Debug the login attempt
-      // console.log("🔍 Starting login debug...");
       await loginDebugger.validateEmail(emailAddress.trim().toLowerCase());
       await loginDebugger.validatePassword(password.trim());
 
-      // Use authService for email/password login
-      const result = await loginDebugger.debugLogin(
+      const loginPromise = loginDebugger.debugLogin(
         emailAddress.trim().toLowerCase(),
         password.trim(),
         rememberMe
       );
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Sign in is taking too long. Check your connection and try again."
+              )
+            ),
+          25000
+        );
+      });
+      const result = await Promise.race([loginPromise, timeout]);
 
       if (result.success && "data" in result && result.data?.token) {
         // console.log("✅ Login successful");
@@ -202,8 +211,11 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
-      // console.error("❌ Login error:", error);
-      authToast.loginFailed("Something went wrong. Please try again.");
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Something went wrong. Please try again.";
+      authToast.loginFailed(message);
     } finally {
       setIsLoading(false);
     }
@@ -370,7 +382,7 @@ export default function LoginScreen() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push("/auth/signup")}
+            onPress={() => router.replace("/auth/signup")}
             className="mt-6"
           >
             <Text className="text-[#344054] text-sm font-jakarta-semibold mt-4">

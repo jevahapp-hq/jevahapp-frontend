@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import TopToast from "../components/TopToast";
 import { communityAPI } from "../utils/communityAPI";
 import { validateGroupForm } from "../utils/communityHelpers";

@@ -68,6 +68,12 @@ export function useSongInteractions(song: any) {
           setIsLiked(previousLiked);
           setLikeCount(previousLikeCount);
           Alert.alert("Error", "Failed to update like");
+        } else {
+          const payload = (result as any).data?.data ?? (result as any).data;
+          if (typeof payload?.liked === "boolean") setIsLiked(payload.liked);
+          if (typeof payload?.likeCount === "number") {
+            setLikeCount(Math.max(0, payload.likeCount));
+          }
         }
       }
     } catch {

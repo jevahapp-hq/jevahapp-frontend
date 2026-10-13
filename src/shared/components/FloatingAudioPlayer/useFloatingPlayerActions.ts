@@ -33,10 +33,10 @@ export function useFloatingPlayerActions({ clear, onExpand }: Params) {
   }, [clear]);
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { top: topInset } = useSafeAreaInsets();
+  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
 
-  const defaultBottom = getMiniPlayerBottomOffset();
-  const minBottom = getMiniPlayerFloorOffset();
+  const defaultBottom = getMiniPlayerBottomOffset(bottomInset);
+  const minBottom = getMiniPlayerFloorOffset(bottomInset);
   const barWidth = Math.max(0, screenWidth - MINI_PLAYER_SIDE_MARGIN * 2);
 
   const offsetX = useSharedValue(0);

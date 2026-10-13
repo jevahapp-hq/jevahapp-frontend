@@ -139,6 +139,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   const handleSurfaceReadyChange = useCallback((_ready: boolean) => {}, []);
 
+  const handleDoubleTapLike = useCallback(() => {
+    setLikeBurstKey((k) => k + 1);
+    if (userLikeState) return;
+    onLike(key, video);
+  }, [userLikeState, onLike, key, video]);
+
   // Always reserve footer layout for video posts — popping it in after the
   // frame caused FlashList rows to stack/flash over each other.
   const showFooterSlot = true;
@@ -170,6 +176,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         isMuted={isMuted}
         onVideoTap={onVideoTap}
         onTogglePlay={onTogglePlay}
+        onDoubleTapLike={handleDoubleTapLike}
+        likeBurstKey={likeBurstKey}
         onToggleMute={onToggleMute}
         getContentKey={getContentKey}
         onDelete={onDelete}

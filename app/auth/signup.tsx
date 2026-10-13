@@ -326,9 +326,9 @@ export default function SignUpScreen() {
               </TouchableOpacity>
               <Text className="flex-1 text-[#344054] text-[13px] font-jakarta leading-5 text-left pt-[2px]">
                 I agree to the{" "}
-                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/terms")}>Terms of Service</Text>,{" "}
-                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/privacy")}>Privacy Policy</Text>, and{" "}
-                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/copyright")}>Copyright Policy</Text>.
+                <Text className="font-jakarta-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/terms")}>Terms of Service</Text>,{" "}
+                <Text className="font-jakarta-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/privacy")}>Privacy Policy</Text>, and{" "}
+                <Text className="font-jakarta-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/copyright")}>Copyright Policy</Text>.
               </Text>
             </View>
             {termsError ? (
@@ -359,7 +359,7 @@ export default function SignUpScreen() {
             </Text>
 
             <TouchableOpacity
-              onPress={() => router.push("/auth/login")}
+              onPress={() => router.replace("/auth/login")}
               className="mt-3 py-3 px-6"
               disabled={isLoading}
               accessibilityRole="button"

@@ -4,6 +4,7 @@
  * Client owns RAM: page size, prefetch, player window, image budget.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Dimensions, PixelRatio, Platform } from "react-native";
 import { appMmkv } from "../cache/mmkvStorage";
 import { isLiteAppBuild } from "../config/appVariant";
 
@@ -11,6 +12,7 @@ export type LiteMode = "auto" | "on" | "off";
 
 const STORAGE_KEY = "jevah_lite_mode_v1";
 const MMKV_LITE_KEY = "jevah_lite_mode_v1";
+const LITE_RAM_BYTES = 3.5 * 1024 ** 3;
 
 let mode: LiteMode = "auto";
 let hydrated = false;
@@ -18,10 +20,33 @@ let cachedActive: boolean | null = null;
 const listeners = new Set<(active: boolean, mode: LiteMode) => void>();
 
 /**
- * Auto lite used to treat most Androids as low-end (smaller pages, posters,
- * fewer players). The feed matches iPhone unless the user turns lite on.
+ * Budget Androids (Itel A662L class) need lite RAM caps. Flagships stay
+ * on the full feed unless the user turns lite on.
  */
 export function detectLowEndAndroid(): boolean {
+  if (Platform.OS !== "android") return false;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Device = require("expo-device");
+    const mem = Device?.totalMemory;
+    if (typeof mem === "number" && mem > 0 && mem < LITE_RAM_BYTES) {
+      return true;
+    }
+  } catch {
+    // package optional
+  }
+
+  const { width } = Dimensions.get("window");
+  const pr = PixelRatio.get();
+  const api =
+    typeof Platform.Version === "number"
+      ? Platform.Version
+      : parseInt(String(Platform.Version), 10) || 99;
+
+  if (api <= 28) return true;
+  if (width <= 360) return true;
+  if (pr <= 1.5 && width < 400) return true;
   return false;
 }
 
@@ -229,7 +254,7 @@ export function getLiteListWindow(): {
 } {
   const lite = isLiteProfileActive();
   return {
-    drawDistance: lite ? 600 : 480,
+    drawDistance: lite ? 280 : 480,
     /** Must match FEED_VIDEO_ROW_SIZE or FlashList recaclulates every cell. */
     estimatedItemSize: 552,
   };

@@ -12,6 +12,7 @@
  * does not flash the cover thumbnail, and prime the next card the same way
  * so scrolling down also shows a decoded frame instead of the poster.
  */
+import { Platform } from "react-native";
 import {
   getUnderReviewExtraRowSize,
   needsUnderReviewRowSpace,
@@ -58,6 +59,33 @@ export const FEED_INITIAL_MOUNT_COUNT = 2;
 export const FEED_WARM_IDLE_MOUNT_COUNT = 0;
 /** Current playing + previous paused + next primed. Hidden tabs still mount 0. */
 export const FEED_HARD_MAX_PLAYERS = 3;
+
+/**
+ * Android's app heap on budget phones is often 128MB. Two ExoPlayers
+ * decoding at once fill it and the process dies in setPlaying.
+ * Keep one decoder there. iOS still primes the neighbor.
+ */
+export function getFeedPlayerBudget(): {
+  maxPlayers: number;
+  neighborDistance: number;
+  initialMount: number;
+  warmDistance: number;
+} {
+  if (Platform.OS === "android") {
+    return {
+      maxPlayers: 1,
+      neighborDistance: 0,
+      initialMount: 1,
+      warmDistance: 1,
+    };
+  }
+  return {
+    maxPlayers: FEED_HARD_MAX_PLAYERS,
+    neighborDistance: FEED_PRELOAD_NEIGHBOR_DISTANCE,
+    initialMount: FEED_INITIAL_MOUNT_COUNT,
+    warmDistance: FEED_PRELOAD_WARM_DISTANCE,
+  };
+}
 
 /**
  * A card stays the one playing until less than this much of it is still

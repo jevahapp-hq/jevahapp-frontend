@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { getPdfJsExtractorHtml } from "./pdfJsExtractorHtml";
+import { getPdfJsExtractorHtml } from "./_pdfJsExtractorHtml";
 
 export type PdfJsExtractorMessage =
   | { type: "ready" }

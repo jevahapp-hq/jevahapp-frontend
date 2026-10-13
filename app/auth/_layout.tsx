@@ -8,5 +8,15 @@ export default function AuthLayout() {
     return <Redirect href="/categories/HomeScreen" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "fade",
+        animationDuration: 180,
+        animationTypeForReplace: "push",
+        contentStyle: { backgroundColor: "#FFFFFF" },
+      }}
+    />
+  );
 }

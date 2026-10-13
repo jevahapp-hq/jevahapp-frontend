@@ -5,7 +5,7 @@ import {
   EbookChapter,
   firstReadableChapter,
   upsertChapter,
-} from "../pdfText/buildEbookChapters";
+} from "../pdfText/_buildEbookChapters";
 import type { PdfJsExtractorMessage } from "../pdfText/PdfJsExtractorWebView";
 
 export type ExtractionStatus =

@@ -14,6 +14,8 @@ export interface UseVideoCardTapLogicParams {
   audioIsPlaying: boolean;
   onTogglePlay: (key: string) => void;
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
+  /** IG Reels: double-tap likes if needed and plays the burst. Does not unlike. */
+  onDoubleTapLike?: () => void;
   audioControlsPause: () => void;
   togglePlayback: () => void;
   videoRef: React.MutableRefObject<VideoPlayer | null>;
@@ -30,6 +32,7 @@ export function useVideoCardTapLogic({
   audioIsPlaying,
   onTogglePlay,
   onVideoTap,
+  onDoubleTapLike,
   audioControlsPause,
   togglePlayback,
   videoRef,
@@ -42,13 +45,26 @@ export function useVideoCardTapLogic({
   const toggleProcessingRef = useRef(false);
 
   const handleVideoTap = useCallback(() => {
-    tapCountRef.current = 0;
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current);
-      tapTimeoutRef.current = null;
+    const now = Date.now();
+    const gap = now - lastTapRef.current;
+    lastTapRef.current = now;
+
+    if (gap > 0 && gap <= 280) {
+      tapCountRef.current = 0;
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+      }
+      onDoubleTapLike?.();
+      return;
     }
-    onTogglePlay(key);
-  }, [onTogglePlay, key]);
+
+    if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
+    tapTimeoutRef.current = setTimeout(() => {
+      tapTimeoutRef.current = null;
+      onTogglePlay(key);
+    }, 280);
+  }, [onTogglePlay, key, onDoubleTapLike]);
 
   const handleTogglePlay = useCallback(
     (setIsPlayTogglePending: (v: boolean) => void) => {

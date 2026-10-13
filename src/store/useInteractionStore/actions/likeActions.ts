@@ -14,8 +14,6 @@ import { createGestureIdempotencyKey } from "@/app/utils/contentInteraction/idem
 import {
   baselineToggleCount,
   baselineToggleFlag,
-  reconcileToggleCount,
-  reconcileToggleFlag,
 } from "@/shared/media/engagementToggle";
 import type { StoreGet, StoreSet } from "../types";
 
@@ -109,8 +107,12 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
         };
       }
 
-      // IG/TikTok: never block the next tap while a request is in flight.
-      // Latest generation wins; stale responses are ignored.
+      // One gesture in flight. Extra taps are ignored so rage-taps cannot
+      // stack POSTs and desync the heart from the count.
+      if (get().loadingInteraction?.[key]) {
+        return currentSnapshot();
+      }
+
       const generation = (likeGeneration.get(contentId) ?? 0) + 1;
       likeGeneration.set(contentId, generation);
 
@@ -199,6 +201,9 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
 
         // Offline queue accepted the optimistic state — keep heart, clear loading.
         if (result?.offlineQueued || result?.offlineCancelled) {
+          set((state: any) => ({
+            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          }));
           return {
             liked: result.liked,
             totalLikes: result.totalLikes,
@@ -206,26 +211,14 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
           };
         }
 
-        // Backend `liked` is intermittently pre-toggle. Keep the optimistic
-        // heart on mismatch; only adopt the server count when the flag agrees.
+        // Server `liked` + `likeCount` are the source of truth after the write.
         const optimisticLiked = Boolean(optimistic?.userInteractions?.liked);
-        const liked = reconcileToggleFlag({
-          optimistic: optimisticLiked,
-          server: result.liked,
-        });
-        const flagMismatch = liked !== Boolean(result.liked);
-        const nextLikes = reconcileToggleCount({
-          optimisticCount: optimistic?.likes ?? 0,
-          serverCount: result.totalLikes,
-          flagMismatch,
-        });
-        if (flagMismatch && __DEV__) {
-          console.log(
-            `ℹ️ LIKE MISMATCH ${contentId}: optimistic=${optimisticLiked} server=${Boolean(
-              result.liked
-            )} count=${result.totalLikes}. Keeping optimistic liked.`
-          );
-        }
+        const liked =
+          typeof result.liked === "boolean" ? result.liked : optimisticLiked;
+        const serverCount = Number(result.totalLikes);
+        const nextLikes = Number.isFinite(serverCount)
+          ? Math.max(0, serverCount)
+          : Math.max(0, optimistic?.likes ?? 0);
 
         set((state: any) => {
           const s = state.contentStats[contentId];

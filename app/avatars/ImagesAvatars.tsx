@@ -1,6 +1,6 @@
 
 
-import { RenderAvatarRowProps } from "./avatarTypes";
+import { RenderAvatarRowProps } from "./_avatarTypes";
 import * as ImagePicker from "expo-image-picker";
 import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
 

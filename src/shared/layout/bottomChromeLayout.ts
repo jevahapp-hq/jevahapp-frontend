@@ -7,7 +7,19 @@
  * clear the FAB and silently stopped clearing the expanded sheet. Deriving all
  * of it here keeps them from drifting apart again.
  */
+import { Platform } from "react-native";
 import { getBottomNavHeight, getFabSize, getResponsiveSpacing } from "../../../utils/responsive";
+
+/**
+ * Distance to keep above the Android system navigation keys.
+ * Itel and other Transsion phones often report a 0 bottom inset while the
+ * 3-button bar still covers the bottom of the window.
+ */
+export function getSystemNavClearance(insetBottom = 0): number {
+  const inset = Number.isFinite(insetBottom) ? insetBottom : 0;
+  if (Platform.OS === "android") return Math.max(inset, 48);
+  return Math.max(inset, 0);
+}
 
 /** How far the FAB wrapper is lifted above the nav's bottom edge. */
 function fabLift(): number {
@@ -20,8 +32,8 @@ function fabWrapperPadding(): number {
 }
 
 /** `bottom` for the circular FAB wrapper in the bottom nav. */
-export function getFabWrapperBottom(): number {
-  return getBottomNavHeight() - fabLift();
+export function getFabWrapperBottom(insetBottom = 0): number {
+  return getBottomNavHeight() - fabLift() + getSystemNavClearance(insetBottom);
 }
 
 /** Outer hit box of the white FAB wrapper (button + padding). */
@@ -30,16 +42,18 @@ export function getFabOuterSize(): number {
 }
 
 /** Screen-space Y of the FAB's top edge, measured from the bottom. */
-export function getFabTopEdge(): number {
+export function getFabTopEdge(insetBottom = 0): number {
   return (
-    getFabWrapperBottom() + getFabSize().size + fabWrapperPadding() * 2
+    getFabWrapperBottom(insetBottom) +
+    getFabSize().size +
+    fabWrapperPadding() * 2
   );
 }
 
 /** `bottom` for the create sheet so it clears the FAB it expands from. */
-export function getCreateSheetBottomOffset(): number {
+export function getCreateSheetBottomOffset(insetBottom = 0): number {
   return (
-    getFabWrapperBottom() +
+    getFabWrapperBottom(insetBottom) +
     getFabSize().size +
     getResponsiveSpacing(8, 10, 12, 16)
   );
@@ -66,13 +80,13 @@ const MINI_PLAYER_FAB_GAP = 52;
  * Lowest the bar's bottom edge may sit while dragging. Tight to the FAB so
  * the player can use the screen, but never covers the + or the nav bar.
  */
-export function getMiniPlayerFloorOffset(): number {
-  return getFabTopEdge() + getResponsiveSpacing(8, 10, 12, 14);
+export function getMiniPlayerFloorOffset(insetBottom = 0): number {
+  return getFabTopEdge(insetBottom) + getResponsiveSpacing(8, 10, 12, 14);
 }
 
 /**
  * `bottom` for the Now Playing bar at rest.
  */
-export function getMiniPlayerBottomOffset(): number {
-  return getFabTopEdge() + MINI_PLAYER_FAB_GAP;
+export function getMiniPlayerBottomOffset(insetBottom = 0): number {
+  return getFabTopEdge(insetBottom) + MINI_PLAYER_FAB_GAP;
 }

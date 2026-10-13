@@ -143,24 +143,10 @@ export function useVideoCardPlayback({
      */
     if (isAudioSermon || !player) return;
 
-    const pendingResume = useReelsStore.getState().resumePlayback;
-    const keepFeedResume =
-      pendingResume?.target === "feed" &&
-      String(pendingResume.contentId) === String(contentId) &&
-      pendingResume.positionMs > 400;
-
-    if (
-      !keepFeedResume &&
-      (lastPositionMsRef.current !== 0 || lastProgressRef.current !== 0)
-    ) {
-      lastPositionMsRef.current = 0;
-      lastProgressRef.current = 0;
-      setVideoPositionMs(0);
-      setVideoProgress(0);
-    }
-
     try {
-      player.timeUpdateEventInterval = 0.25;
+      // One tick a second. A 0.25s interval setStates often enough to hit
+      // "Maximum update depth" on low-end Android and keeps the UI thread busy.
+      player.timeUpdateEventInterval = 1;
     } catch {
       // no-op
     }
@@ -184,6 +170,8 @@ export function useVideoCardPlayback({
       if (ms > 0) commitDurationMs(ms);
     };
 
+    let lastUiCommitAt = 0;
+
     const applyPositionSeconds = (positionSec: number, isPlaying: boolean) => {
       if (!Number.isFinite(positionSec)) return;
 
@@ -194,15 +182,19 @@ export function useVideoCardPlayback({
       const progress =
         durationMs > 0 ? Math.max(0, Math.min(1, clamped / durationMs)) : 0;
 
-      if (
-        Math.abs(clamped - lastPositionMsRef.current) < POSITION_EPSILON_MS &&
-        Math.abs(progress - lastProgressRef.current) < 0.002
-      ) {
+      const jump = Math.abs(clamped - lastPositionMsRef.current);
+      if (jump < POSITION_EPSILON_MS && Math.abs(progress - lastProgressRef.current) < 0.002) {
         return;
       }
+      // Seek jumps commit immediately. Steady playback commits at most once a second
+      // so a chatty player cannot nest setState until React throws.
+      const now = Date.now();
+      if (jump < 1500 && now - lastUiCommitAt < 1000) return;
 
+      lastUiCommitAt = now;
       lastPositionMsRef.current = clamped;
       lastProgressRef.current = progress;
+      if (!isMountedRef.current) return;
       setVideoPositionMs(clamped);
       setVideoProgress(progress);
 
@@ -302,9 +294,13 @@ export function useVideoCardPlayback({
           // Restart only at the real end, or once native loop has already
           // snapped back to 0.
           const durationSec = Number(player.duration) || 0;
+          // Duration still unknown (0) must not count as "the end" — that
+          // restart loop setStates until React hits the update cap.
+          if (!(durationSec > 1)) return;
           const now = Number(player.currentTime) || 0;
-          const atEnd =
-            durationSec <= 1 || now >= durationSec - 0.4 || now < 0.2;
+          const wasNearEnd =
+            lastPositionMsRef.current > durationSec * 1000 - 1500;
+          const atEnd = now >= durationSec - 0.4 || (now < 0.25 && wasNearEnd);
           if (!atEnd) return;
         } catch {
           // Native player already released.

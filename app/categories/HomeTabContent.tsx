@@ -22,7 +22,6 @@ import { FeedSkeletonStack } from "../../src/features/media/AllContentTikTok/com
 import {
   getResponsiveBorderRadius,
   getResponsiveSpacing,
-  getResponsiveTextStyle,
 } from "../../utils/responsive";
 import Header from "../components/Header";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
@@ -237,7 +236,7 @@ export default function HomeTabContent({
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             style={styles.railScroll}
-            contentContainerStyle={styles.railContent}
+            contentContainerStyle={[styles.railContent, { flexGrow: 0 }]}
           >
             {categories.map((category) => {
               const selected = selectedCategory === category;
@@ -255,24 +254,28 @@ export default function HomeTabContent({
                     };
                   }}
                   style={{
-                    marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    marginHorizontal: 4,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
                     borderRadius: chipRadius,
                     borderWidth: selected ? 0 : 1,
                     borderColor: selected ? "transparent" : "#6B6E7C",
                     backgroundColor: selected ? "#000000" : "#FFFFFF",
-                    height: 44,
+                    height: 40,
                     justifyContent: "center",
                     alignItems: "center",
                   }}
                 >
                   <View>
                     <Text
-                      style={[
-                        getResponsiveTextStyle("button"),
-                        { color: selected ? "#FFFFFF" : "#1D2939" },
-                      ]}
+                      style={{
+                        fontFamily: "PlusJakartaSans_700Bold",
+                        fontSize: 13,
+                        lineHeight: 16,
+                        color: selected ? "#FFFFFF" : "#1D2939",
+                      }}
                     >
                       {category}
                     </Text>

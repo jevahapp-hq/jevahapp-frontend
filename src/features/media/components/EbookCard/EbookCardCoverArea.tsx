@@ -54,7 +54,7 @@ export function EbookCardCoverArea(props: {
 
         <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
           <Text
-            className="text-white font-semibold text-sm"
+            className="text-white font-jakarta-semibold text-sm"
             numberOfLines={2}
             style={{
               textShadowColor: "rgba(0, 0, 0, 0.8)",

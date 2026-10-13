@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { usePrayers, useSearchPrayers } from "../hooks/usePrayers";
 import { PrayerRequest as PrayerRequestType } from "../utils/communityAPI";
 import { formatTimestamp } from "../utils/communityHelpers";

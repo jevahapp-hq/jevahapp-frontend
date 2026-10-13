@@ -1,4 +1,8 @@
-import "dotenv/config";
+try {
+  require("dotenv/config");
+} catch {
+  // Expo CLI already loads .env / .env.local; dotenv may be absent while node_modules is repairing.
+}
 
 const appVariant =
   process.env.EXPO_PUBLIC_APP_VARIANT === "lite" ? "lite" : "full";
@@ -28,12 +32,14 @@ const androidBuildArchs =
 
 export default {
   expo: {
-    name: isLiteVariant ? "Jevah Lite" : "jevah-app",
+    // Display name is always "Jevah App". Lite only changes package id / packaging
+    // for 32-bit phones — not the home-screen label.
+    name: "Jevah App",
     slug: "jevah-app",
     version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/Jevah.png",
-    scheme: isLiteVariant ? ["jevahlite", "jevah"] : ["jevahapp", "jevah"],
+    scheme: ["jevahapp", "jevah"],
     userInterfaceStyle: "light",
     backgroundColor: "#FCFCFD",
     splash: {
@@ -42,7 +48,7 @@ export default {
       backgroundColor: SPLASH_BACKGROUND,
     },
     newArchEnabled: true,
-    owner: "bldlne",
+    owner: "jevah_app",
     extra: {
       appVariant,
       API_URL:
@@ -57,7 +63,7 @@ export default {
       API_ENV: process.env.EXPO_PUBLIC_API_ENV || "production",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: "214e1ad5-a38e-4f00-89e9-d034797bc9c8",
+        projectId: "327185a0-8fa5-4dd2-a762-0d5c86a9bb35",
       },
     },
     ios: {
@@ -67,6 +73,7 @@ export default {
         : "com.italgyirhrudhdhd.jevahapp",
       associatedDomains: ["applinks:jevahapp.com", "applinks:www.jevahapp.com"],
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
         NSPhotoLibraryUsageDescription:
           "This app needs access to your photo and video library.",
         NSCameraUsageDescription:
@@ -132,10 +139,16 @@ export default {
     },
     web: {
       bundler: "metro",
-      output: "static",
+      // Static SSR races Android HMR and OOMs Metro on this machine.
+      // Keep single for day-to-day mobile; use "static" only for web export builds.
+      output: process.env.EXPO_WEB_OUTPUT === "static" ? "static" : "single",
       favicon: "./assets/images/favicon.png",
     },
     plugins: [
+      "./plugins/withAndroidNoDupResources",
+      "./plugins/withAndroidMedia3",
+      "./plugins/withAndroidLargeHeap",
+      "./plugins/withScreensFabricGuard",
       [
         "expo-router",
         {
@@ -154,6 +167,7 @@ export default {
       "expo-audio",
       "expo-video",
       "expo-web-browser",
+      "expo-sharing",
       [
         "expo-splash-screen",
         {
@@ -172,15 +186,21 @@ export default {
         {
           android: {
             ...(androidBuildArchs ? { buildArchs: androidBuildArchs } : {}),
-            enableMinifyInReleaseBuilds: true,
+            // Minify/crunch/bundle-compress produce duplicate res/* names in the
+            // APK zip. Tecno/HiOS PackageInstaller then fails ("package installer
+            // failed") even when USB-sideloading a valid-looking file.
+            enableMinifyInReleaseBuilds: !isLiteVariant,
             enableShrinkResourcesInReleaseBuilds: false,
-            enableBundleCompression: true,
+            enablePngCrunchInReleaseBuilds: !isLiteVariant,
+            enableBundleCompression: !isLiteVariant,
             useLegacyPackaging: isLiteVariant,
             extraProguardRules: [
               "-keep class com.facebook.hermes.** { *; }",
               "-keep class com.facebook.jni.** { *; }",
               "-keep class expo.modules.** { *; }",
+              "-keep class androidx.media3.** { *; }",
               "-dontwarn expo.modules.**",
+              "-dontwarn androidx.media3.**",
             ].join("\n"),
           },
         },

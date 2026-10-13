@@ -1,4 +1,4 @@
-import { RenderAvatarRowProps } from "./avatarTypes";
+import { RenderAvatarRowProps } from "./_avatarTypes";
 import { Text, View } from "react-native";
 
 const cuteAvatars = {
